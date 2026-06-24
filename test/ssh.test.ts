@@ -47,11 +47,11 @@ describe('SSH configuration and scan protocol', () => {
       '',
     ].join('\n'));
     const environment: SshEnvironment = {
-      platform: 'linux',
-      isWsl: true,
-      homeDir: '/home/test',
-      username: 'test',
-      env: {},
+      platform: process.platform,
+      isWsl: false,
+      homeDir: os.homedir(),
+      username: os.userInfo().username,
+      env: process.env,
     };
     const loaded = loadSshHosts({ ...settings, sshConfigPath: configPath }, environment);
     expect(loaded.hosts).toHaveLength(1);
@@ -60,7 +60,7 @@ describe('SSH configuration and scan protocol', () => {
       hostname: '10.0.0.1',
       user: 'root',
       port: 22,
-      useAlias: false,
+      useAlias: process.platform === 'win32',
     });
   });
 
