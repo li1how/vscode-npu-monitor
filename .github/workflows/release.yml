@@ -1,0 +1,90 @@
+name: Release VSIX
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate release tag
+        id: release
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const packageJson = require('./package.json');
+          const version = packageJson.version;
+          const tag = process.env.GITHUB_REF_NAME;
+
+          if (!/^\d+\.\d+\.\d+$/.test(version)) {
+            throw new Error(`package.json version must be stable SemVer, got: ${version}`);
+          }
+          if (tag !== `v${version}`) {
+            throw new Error(`Tag ${tag} does not match package version v${version}`);
+          }
+
+          fs.appendFileSync(
+            process.env.GITHUB_OUTPUT,
+            `version=${version}\nasset=release/vscode-npu-monitor-${version}.vsix\n`,
+          );
+          NODE
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          release_commit="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          if ! git merge-base --is-ancestor "$release_commit" refs/remotes/origin/main; then
+            echo "Tag $GITHUB_REF_NAME does not point to a commit on main." >&2
+            exit 1
+          fi
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build VSIX
+        run: npm run vsix
+
+      - name: Verify release asset
+        env:
+          RELEASE_ASSET: ${{ steps.release.outputs.asset }}
+        run: test -f "$RELEASE_ASSET"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ASSET: ${{ steps.release.outputs.asset }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" "$RELEASE_ASSET" \
+              --clobber \
+              --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$RELEASE_TAG" "$RELEASE_ASSET" \
+              --generate-notes \
+              --title "$RELEASE_TAG" \
+              --verify-tag \
+              --repo "$GITHUB_REPOSITORY"
+          fi

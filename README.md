@@ -39,6 +39,26 @@ code --install-extension release/vscode-npu-monitor-0.1.0.vsix
 code tools/vscode-npu-monitor
 ```
 
+## 发布
+
+推送与 `package.json` 版本一致的 `vX.Y.Z` 标签后，GitHub Actions 会运行完整
+检查、生成 VSIX，并创建包含自动 Release Notes 的 GitHub Release。标签必须指向
+`main` 上的提交，并且仅支持稳定的三段式语义版本。
+
+准备新版本时更新 `package.json`、`package-lock.json` 和 `CHANGELOG.md`：
+
+```bash
+npm version 0.1.1 --no-git-tag-version
+git add package.json package-lock.json CHANGELOG.md
+git commit -m "[Release] Prepare v0.1.1"
+git push origin main
+git tag -a v0.1.1 -m "v0.1.1"
+git push origin v0.1.1
+```
+
+发布附件名根据版本自动生成，例如
+`release/vscode-npu-monitor-0.1.1.vsix`。GitHub 同时提供源码 zip 和 tar.gz。
+
 ## 使用
 
 1. 打开 Activity Bar 中的 **NPU Monitor**。

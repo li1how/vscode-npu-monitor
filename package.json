@@ -266,15 +266,14 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "lint": "eslint src test esbuild.mjs --no-error-on-unmatched-pattern",
+    "lint": "eslint src test scripts esbuild.mjs vitest.config.ts --no-error-on-unmatched-pattern",
     "test": "vitest run",
     "compile": "npm run check-types && node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "check": "npm run check-types && npm run lint && npm test",
     "package": "npm run check && node esbuild.mjs --production",
     "vscode:prepublish": "npm run package",
-    "prepare-release": "node -e \"require('node:fs').mkdirSync('release',{recursive:true})\"",
-    "vsix": "npm run prepare-release && vsce package --no-dependencies --out release/vscode-npu-monitor-0.1.0.vsix"
+    "vsix": "node scripts/package-vsix.mjs"
   },
   "dependencies": {
     "ssh-config": "^5.1.0"
