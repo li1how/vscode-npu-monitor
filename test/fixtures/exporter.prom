@@ -1,0 +1,16 @@
+npu_chip_info_health_status{id="0",model_name="Ascend910",pcie_bus_info="0000:01:00.0"} 1
+npu_chip_info_overall_utilization{id="0",model_name="Ascend910",pcie_bus_info="0000:01:00.0"} 0
+npu_chip_info_hbm_used_memory{id="0",model_name="Ascend910"} 3143
+npu_chip_info_hbm_total_memory{id="0",model_name="Ascend910"} 65536
+npu_chip_info_temperature{id="0",model_name="Ascend910"} 28
+npu_chip_info_power{id="0",model_name="Ascend910"} 156.6
+npu_chip_info_process_info_num{id="0",model_name="Ascend910"} 0
+npu_chip_info_process_info{id="0",model_name="Ascend910",process_id=""} 0
+npu_chip_info_health_status{id="1",model_name="Ascend910",pcie_bus_info="0000:02:00.0"} 1
+npu_chip_info_overall_utilization{id="1",model_name="Ascend910",pcie_bus_info="0000:02:00.0"} 25
+npu_chip_info_hbm_used_memory{id="1",model_name="Ascend910"} 32000
+npu_chip_info_hbm_total_memory{id="1",model_name="Ascend910"} 65536
+npu_chip_info_temperature{id="1",model_name="Ascend910"} 42
+npu_chip_info_power{id="1",model_name="Ascend910"} 180
+npu_chip_info_process_info_num{id="1",model_name="Ascend910"} 1
+npu_chip_info_process_info{id="1",model_name="Ascend910",process_id="4321",process_name="worker"} 28000

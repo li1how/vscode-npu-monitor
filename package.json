@@ -1,0 +1,295 @@
+{
+  "name": "vscode-npu-monitor",
+  "displayName": "%extension.displayName%",
+  "description": "%extension.description%",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/li1how/vscode-npu-monitor.git"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "extensionKind": [
+    "workspace"
+  ],
+  "main": "./dist/extension.js",
+  "l10n": "./l10n",
+  "files": [
+    "dist/extension.js",
+    "media/",
+    "l10n/",
+    "package.nls.json",
+    "package.nls.zh-cn.json",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:npuMonitor.hosts"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "npuMonitor",
+          "title": "%view.container%",
+          "icon": "media/npu-monitor.svg"
+        }
+      ]
+    },
+    "views": {
+      "npuMonitor": [
+        {
+          "id": "npuMonitor.hosts",
+          "name": "%view.hosts%",
+          "contextualTitle": "%view.container%"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "npuMonitor.scanAll",
+        "title": "%command.scanAll%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "npuMonitor.reloadConfig",
+        "title": "%command.reloadConfig%",
+        "icon": "$(server-process)"
+      },
+      {
+        "command": "npuMonitor.scanHost",
+        "title": "%command.scanHost%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "npuMonitor.scanSelected",
+        "title": "%command.scanSelected%",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "npuMonitor.subscribeHost",
+        "title": "%command.subscribe%",
+        "icon": "$(bell)"
+      },
+      {
+        "command": "npuMonitor.unsubscribeHost",
+        "title": "%command.unsubscribe%",
+        "icon": "$(bell-slash)"
+      },
+      {
+        "command": "npuMonitor.selectSshConfig",
+        "title": "%command.selectSshConfig%"
+      },
+      {
+        "command": "npuMonitor.openSettings",
+        "title": "%command.openSettings%",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "npuMonitor.showOutput",
+        "title": "%command.showOutput%",
+        "icon": "$(output)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "npuMonitor.scanAll",
+          "when": "view == npuMonitor.hosts",
+          "group": "navigation@1"
+        },
+        {
+          "command": "npuMonitor.reloadConfig",
+          "when": "view == npuMonitor.hosts",
+          "group": "navigation@2"
+        },
+        {
+          "command": "npuMonitor.openSettings",
+          "when": "view == npuMonitor.hosts",
+          "group": "navigation@3"
+        },
+        {
+          "command": "npuMonitor.scanSelected",
+          "when": "view == npuMonitor.hosts",
+          "group": "2_actions@1"
+        },
+        {
+          "command": "npuMonitor.selectSshConfig",
+          "when": "view == npuMonitor.hosts",
+          "group": "2_actions@2"
+        },
+        {
+          "command": "npuMonitor.showOutput",
+          "when": "view == npuMonitor.hosts",
+          "group": "2_actions@3"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "npuMonitor.scanHost",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
+          "group": "inline@1"
+        },
+        {
+          "command": "npuMonitor.subscribeHost",
+          "when": "view == npuMonitor.hosts && viewItem == npuHostUnsubscribed",
+          "group": "inline@2"
+        },
+        {
+          "command": "npuMonitor.unsubscribeHost",
+          "when": "view == npuMonitor.hosts && viewItem == npuHostSubscribed",
+          "group": "inline@2"
+        },
+        {
+          "command": "npuMonitor.scanSelected",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
+          "group": "1_scan@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "%configuration.title%",
+      "properties": {
+        "npuMonitor.sshConfigPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%configuration.sshConfigPath%"
+        },
+        "npuMonitor.knownHostsPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%configuration.knownHostsPath%"
+        },
+        "npuMonitor.sshExecutablePath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "%configuration.sshExecutablePath%"
+        },
+        "npuMonitor.connectTimeoutSeconds": {
+          "type": "number",
+          "default": 8,
+          "minimum": 1,
+          "maximum": 60,
+          "scope": "machine",
+          "description": "%configuration.connectTimeoutSeconds%"
+        },
+        "npuMonitor.exporterProbeTimeoutSeconds": {
+          "type": "number",
+          "default": 2,
+          "minimum": 1,
+          "maximum": 10,
+          "scope": "machine",
+          "description": "%configuration.exporterProbeTimeoutSeconds%"
+        },
+        "npuMonitor.npuSmiTimeoutSeconds": {
+          "type": "number",
+          "default": 10,
+          "minimum": 1,
+          "maximum": 60,
+          "scope": "machine",
+          "description": "%configuration.npuSmiTimeoutSeconds%"
+        },
+        "npuMonitor.maxConcurrentHosts": {
+          "type": "number",
+          "default": 6,
+          "minimum": 1,
+          "maximum": 32,
+          "scope": "machine",
+          "description": "%configuration.maxConcurrentHosts%"
+        },
+        "npuMonitor.excludedHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "machine",
+          "description": "%configuration.excludedHosts%"
+        },
+        "npuMonitor.pollIntervalSeconds": {
+          "type": "number",
+          "default": 60,
+          "minimum": 10,
+          "maximum": 86400,
+          "scope": "window",
+          "description": "%configuration.pollIntervalSeconds%"
+        },
+        "npuMonitor.idleScope": {
+          "type": "string",
+          "enum": [
+            "allCards",
+            "anyCard"
+          ],
+          "enumDescriptions": [
+            "%configuration.idleScope.allCards%",
+            "%configuration.idleScope.anyCard%"
+          ],
+          "default": "allCards",
+          "scope": "window",
+          "description": "%configuration.idleScope%"
+        },
+        "npuMonitor.idleRequireNoProcesses": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%configuration.idleRequireNoProcesses%"
+        },
+        "npuMonitor.idleUtilizationThresholdPercent": {
+          "type": "number",
+          "default": 1,
+          "minimum": 0,
+          "maximum": 100,
+          "scope": "window",
+          "description": "%configuration.idleUtilizationThresholdPercent%"
+        },
+        "npuMonitor.idleConsecutiveChecks": {
+          "type": "number",
+          "default": 1,
+          "minimum": 1,
+          "maximum": 20,
+          "scope": "window",
+          "description": "%configuration.idleConsecutiveChecks%"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src test esbuild.mjs --no-error-on-unmatched-pattern",
+    "test": "vitest run",
+    "compile": "npm run check-types && node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "check": "npm run check-types && npm run lint && npm test",
+    "package": "npm run check && node esbuild.mjs --production",
+    "vscode:prepublish": "npm run package",
+    "prepare-release": "node -e \"require('node:fs').mkdirSync('release',{recursive:true})\"",
+    "vsix": "npm run prepare-release && vsce package --no-dependencies --out release/vscode-npu-monitor-0.1.0.vsix"
+  },
+  "dependencies": {
+    "ssh-config": "^5.1.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/vsce": "^3.6.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.0.0",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.0.0",
+    "vitest": "^3.0.0"
+  }
+}
