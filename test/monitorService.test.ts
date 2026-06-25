@@ -103,6 +103,7 @@ describe('monitor scan orchestration', () => {
     ].join('\n'));
     settingsState.value = {
       sshConfigPath: configPath,
+      remoteSshConfigFile: '',
       knownHostsPath: '',
       sshExecutablePath: '/usr/bin/ssh',
       connectTimeoutSeconds: 8,

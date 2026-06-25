@@ -70,6 +70,7 @@ export interface HostRecord {
 
 export interface MonitorSettings {
   sshConfigPath: string;
+  remoteSshConfigFile: string;
   knownHostsPath: string;
   sshExecutablePath: string;
   connectTimeoutSeconds: number;

@@ -5,6 +5,7 @@ import type { HostSnapshot, MonitorSettings, NpuDevice } from '../src/types.js';
 
 const settings: MonitorSettings = {
   sshConfigPath: '',
+  remoteSshConfigFile: '',
   knownHostsPath: '',
   sshExecutablePath: '',
   connectTimeoutSeconds: 8,

@@ -16,6 +16,8 @@ VS Code。界面语言跟随 VS Code 的中文或英文设置。
 
 自动扫描只访问已订阅机器。手动扫描不会修改订阅列表。
 
+![使用演示](media/demo.gif)
+
 ## 环境要求
 
 - VS Code 1.100 或更高版本。
@@ -29,7 +31,7 @@ VS Code。界面语言跟随 VS Code 的中文或英文设置。
 npm install
 npm run check
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.1.0.vsix
+code --install-extension release/vscode-npu-monitor-0.1.1.vsix
 ```
 
 同一个 VSIX 可以安装到 Windows 本地 Extension Host 或 WSL Extension Host。
@@ -67,8 +69,9 @@ git push origin v0.1.1
 2. 首次进入时扩展只加载 SSH config，不自动扫描全部机器。
 3. 点击标题栏刷新图标扫描全部机器。
 4. 使用机器行的刷新图标扫描单台；多选机器后执行“扫描所选机器”。
-5. 点击铃铛订阅机器；订阅后立即扫描，并仅对订阅机器定时轮询。
-6. 机器达到空闲条件时显示 VS Code 通知。
+5. 使用机器行的终端图标打开 VS Code 终端，并通过 OpenSSH 连接对应机器。
+6. 点击铃铛订阅机器；订阅后立即扫描，并仅对订阅机器定时轮询。
+7. 机器达到空闲条件时显示 VS Code 通知。
 
 每台机器在一次 SSH 会话中完成：
 
@@ -85,7 +88,7 @@ git push origin v0.1.1
 
 | 设置 | 默认值 | 说明 |
 | --- | --- | --- |
-| `sshConfigPath` | 自动检测 | Windows 默认 `%USERPROFILE%\.ssh\config`；WSL 优先 `/mnt/c/Users/<用户>/.ssh/config` |
+| `sshConfigPath` | Remote - SSH 配置或自动检测 | 显式配置的 NPU Monitor 路径优先级最高；留空时先使用 `remote.SSH.configFile`，再按 Windows / WSL 规则自动检测 |
 | `knownHostsPath` | SSH config 同目录 | 主机密钥文件 |
 | `sshExecutablePath` | 自动检测 | Windows OpenSSH 或 `/usr/bin/ssh` |
 | `connectTimeoutSeconds` | `8` | SSH 连接超时 |
@@ -100,13 +103,14 @@ git push origin v0.1.1
 | `idleConsecutiveChecks` | `1` | 空闲提醒前连续满足次数 |
 
 路径支持 `~`、`${env:NAME}` 和 Windows `%NAME%` 环境变量。WSL 读取 Windows
-配置时会转换 `C:\...` 形式的密钥路径。
+配置时会自动转换 NPU Monitor 和 Remote - SSH 设置中的 `C:\...` 路径。
 
 ## 安全行为
 
 - 始终启用 OpenSSH 主机密钥校验。
 - 不自动接受新密钥，不修改 `known_hosts`。
-- 使用 `BatchMode=yes`，不会弹出密码输入。
+- 扫描使用 `BatchMode=yes`，不会弹出密码输入。
+- 交互式 SSH 终端可以在终端中提示输入，但仍启用主机密钥校验并禁用主机密钥更新。
 - 不把机器地址、用户名、SSH 配置或密钥打包进 VSIX。
 
 ## 开发命令

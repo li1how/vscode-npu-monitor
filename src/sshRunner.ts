@@ -49,13 +49,33 @@ export function buildSshArguments(
   connectTimeoutSeconds: number,
   remoteCommand: string,
 ): string[] {
+  return [
+    ...buildBaseSshArguments(host, connectTimeoutSeconds, 'yes'),
+    remoteCommand,
+  ];
+}
+
+export function buildInteractiveSshArguments(
+  host: SshHost,
+  connectTimeoutSeconds: number,
+): string[] {
+  return buildBaseSshArguments(host, connectTimeoutSeconds, 'no');
+}
+
+function buildBaseSshArguments(
+  host: SshHost,
+  connectTimeoutSeconds: number,
+  batchMode: 'yes' | 'no',
+): string[] {
   const args = [
     '-F',
     host.configPath,
     '-o',
-    'BatchMode=yes',
+    'BatchMode=' + batchMode,
     '-o',
     'StrictHostKeyChecking=yes',
+    '-o',
+    'UpdateHostKeys=no',
     '-o',
     'ConnectionAttempts=1',
     '-o',
@@ -78,7 +98,6 @@ export function buildSshArguments(
     }
     args.push(host.user ? host.user + '@' + host.hostname : host.hostname);
   }
-  args.push(remoteCommand);
   return args;
 }
 

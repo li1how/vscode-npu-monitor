@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 
 import { MonitorService, type ScanProgress } from './monitorService.js';
+import { getSettings } from './settings.js';
+import { currentSshEnvironment, detectSshExecutablePath } from './sshConfig.js';
+import { buildInteractiveSshArguments } from './sshRunner.js';
 import { HostNode, NpuTreeProvider, type DeviceNode } from './treeProvider.js';
 
 function aliasesFromSelection(
@@ -41,6 +44,32 @@ async function runWithProgress(
       });
     },
   );
+}
+
+export function openSshTerminal(node?: HostNode): void {
+  if (!node) {
+    return;
+  }
+  try {
+    const settings = getSettings();
+    const environment = currentSshEnvironment(vscode.env.remoteName);
+    const terminal = vscode.window.createTerminal({
+      name: 'NPU SSH: ' + node.record.host.alias,
+      shellPath: detectSshExecutablePath(settings.sshExecutablePath, environment),
+      shellArgs: buildInteractiveSshArguments(
+        node.record.host,
+        settings.connectTimeoutSeconds,
+      ),
+    });
+    terminal.show();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    void vscode.window.showErrorMessage(vscode.l10n.t(
+      'Unable to open SSH terminal for {0}: {1}',
+      node.record.host.alias,
+      message,
+    ));
+  }
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
@@ -110,6 +139,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await service.unsubscribe(node.record.host.alias);
       }
     }),
+    vscode.commands.registerCommand('npuMonitor.openSshTerminal', openSshTerminal),
     vscode.commands.registerCommand('npuMonitor.selectSshConfig', async () => {
       const selected = await vscode.window.showOpenDialog({
         canSelectFiles: true,
@@ -136,7 +166,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('npuMonitor.showOutput', () => output.show()),
     vscode.workspace.onDidChangeConfiguration(async event => {
-      if (event.affectsConfiguration('npuMonitor')) {
+      if (event.affectsConfiguration('npuMonitor') ||
+        event.affectsConfiguration('remote.SSH.configFile')) {
         await service.reloadConfig(false);
         service.restartTimer();
       }

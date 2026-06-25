@@ -19,6 +19,8 @@ the language configured in VS Code.
 Automatic scans access only subscribed hosts. Manual scans never change the
 subscription list.
 
+![Usage demo](media/demo.gif)
+
 ## Requirements
 
 - VS Code 1.100 or later.
@@ -33,7 +35,7 @@ subscription list.
 npm install
 npm run check
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.1.0.vsix
+code --install-extension release/vscode-npu-monitor-0.1.1.vsix
 ```
 
 The same VSIX can be installed in either a local Windows Extension Host or a
@@ -77,9 +79,11 @@ archives in zip and tar.gz formats.
 3. Select the refresh icon in the view title to scan all hosts.
 4. Use the refresh icon on a host to scan it, or select multiple hosts and run
    **Scan Selected Hosts**.
-5. Select the bell icon to subscribe to a host. It is scanned immediately and
+5. Use the terminal icon on a host to open a VS Code terminal connected to that
+   host with OpenSSH.
+6. Select the bell icon to subscribe to a host. It is scanned immediately and
    included in periodic polling.
-6. VS Code displays a notification when a subscribed host becomes idle.
+7. VS Code displays a notification when a subscribed host becomes idle.
 
 Each host scan uses one SSH session to:
 
@@ -100,7 +104,7 @@ Search for `NPU Monitor` in VS Code settings:
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `sshConfigPath` | Auto-detected | `%USERPROFILE%\.ssh\config` on Windows; `/mnt/c/Users/<user>/.ssh/config` is preferred in WSL |
+| `sshConfigPath` | Remote - SSH config or auto-detected | Explicit NPU Monitor paths have highest priority; when empty, `remote.SSH.configFile` is used before Windows / WSL auto-detection |
 | `knownHostsPath` | Next to SSH config | Host key file |
 | `sshExecutablePath` | Auto-detected | Windows OpenSSH or `/usr/bin/ssh` |
 | `connectTimeoutSeconds` | `8` | SSH connection timeout |
@@ -115,15 +119,17 @@ Search for `NPU Monitor` in VS Code settings:
 | `idleConsecutiveChecks` | `1` | Consecutive idle checks required before notification |
 
 Paths support `~`, `${env:NAME}`, and Windows `%NAME%` environment variables.
-When WSL reads a Windows configuration, Windows key paths such as `C:\...` are
-converted automatically.
+When WSL reads a Windows configuration, Windows paths such as `C:\...` are
+converted automatically for both NPU Monitor and Remote - SSH settings.
 
 ## Security
 
 - OpenSSH host key verification is always enabled.
 - The extension never accepts new host keys automatically or modifies
   `known_hosts`.
-- `BatchMode=yes` prevents password prompts.
+- Scans use `BatchMode=yes` to prevent password prompts.
+- Interactive SSH terminals may prompt inside the terminal, but still keep host
+  key verification enabled and disable host key updates.
 - Machine addresses, usernames, SSH configurations, and keys are never bundled
   into the VSIX.
 

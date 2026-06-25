@@ -60,10 +60,14 @@ function resolveConfiguredPath(value: string, environment: SshEnvironment): stri
 
 export function detectSshConfigPath(
   configuredPath: string,
+  remoteSshConfigFile: string,
   environment: SshEnvironment,
 ): string {
   if (configuredPath) {
     return resolveConfiguredPath(configuredPath, environment);
+  }
+  if (remoteSshConfigFile) {
+    return resolveConfiguredPath(remoteSshConfigFile, environment);
   }
   const candidates: string[] = [];
   if (environment.platform === 'win32') {
@@ -201,7 +205,11 @@ export function loadSshHosts(
   settings: MonitorSettings,
   environment: SshEnvironment,
 ): LoadedSshConfig {
-  const configPath = detectSshConfigPath(settings.sshConfigPath, environment);
+  const configPath = detectSshConfigPath(
+    settings.sshConfigPath,
+    settings.remoteSshConfigFile,
+    environment,
+  );
   const text = readFileSync(configPath, 'utf8');
   const config = SSHConfig.parse(text);
   const warnings: string[] = [];

@@ -9,8 +9,10 @@ function numberSetting(config: vscode.WorkspaceConfiguration, key: string, fallb
 
 export function getSettings(): MonitorSettings {
   const config = vscode.workspace.getConfiguration('npuMonitor');
+  const remoteSshConfig = vscode.workspace.getConfiguration('remote.SSH');
   return {
     sshConfigPath: config.get<string>('sshConfigPath', '').trim(),
+    remoteSshConfigFile: remoteSshConfig.get<string>('configFile', '').trim(),
     knownHostsPath: config.get<string>('knownHostsPath', '').trim(),
     sshExecutablePath: config.get<string>('sshExecutablePath', '').trim(),
     connectTimeoutSeconds: numberSetting(config, 'connectTimeoutSeconds', 8),

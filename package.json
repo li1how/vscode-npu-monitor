@@ -2,7 +2,7 @@
   "name": "vscode-npu-monitor",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -86,6 +86,11 @@
         "icon": "$(bell-slash)"
       },
       {
+        "command": "npuMonitor.openSshTerminal",
+        "title": "%command.openSshTerminal%",
+        "icon": "$(terminal)"
+      },
+      {
         "command": "npuMonitor.selectSshConfig",
         "title": "%command.selectSshConfig%"
       },
@@ -148,6 +153,11 @@
           "command": "npuMonitor.unsubscribeHost",
           "when": "view == npuMonitor.hosts && viewItem == npuHostSubscribed",
           "group": "inline@2"
+        },
+        {
+          "command": "npuMonitor.openSshTerminal",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
+          "group": "inline@3"
         },
         {
           "command": "npuMonitor.scanSelected",

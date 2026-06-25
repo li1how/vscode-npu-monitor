@@ -1,6 +1,7 @@
 {
   "The host is no longer present in the SSH configuration.": "该机器已不在 SSH 配置中。",
   "Unable to load SSH configuration: {0}": "无法加载 SSH 配置：{0}",
+  "Unable to open SSH terminal for {0}: {1}": "无法打开 {0} 的 SSH 终端：{1}",
   "Show NPU Monitor": "查看 NPU 监控",
   "Unsubscribe": "取消订阅",
   "{0} is idle.": "{0} 已空闲。",
