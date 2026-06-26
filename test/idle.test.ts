@@ -64,4 +64,45 @@ describe('idle policy', () => {
       health: 'ERROR',
     }]), settings).state).toBe('unhealthy');
   });
+
+  it('ignores process count when idleRequireNoProcesses is false', () => {
+    const noProcessReq = { ...settings, idleRequireNoProcesses: false };
+    expect(isDeviceIdle(device('0', 0, 99), noProcessReq)).toBe(true);
+    expect(isDeviceIdle(device('0', 2, 99), noProcessReq)).toBe(false);
+  });
+
+  it('returns false for a device with undefined utilizationPercent', () => {
+    const dev: NpuDevice = {
+      id: '0',
+      health: 'OK',
+      utilizationPercent: undefined,
+      processCount: 0,
+      processes: [],
+    };
+    expect(isDeviceIdle(dev, settings)).toBe(false);
+  });
+
+  it('treats utilization exactly at the threshold as idle', () => {
+    const atThreshold = { ...settings, idleUtilizationThresholdPercent: 5 };
+    expect(isDeviceIdle(device('0', 5, 0), atThreshold)).toBe(true);
+    expect(isDeviceIdle(device('0', 6, 0), atThreshold)).toBe(false);
+  });
+
+  it('treats an empty device list as partial', () => {
+    expect(evaluateSnapshot(snapshot([]), settings).state).toBe('partial');
+  });
+
+  it('reports idle with idleDevices count when all cards are idle', () => {
+    const devices = [device('0', 0, 0), device('1', 0, 0)];
+    const result = evaluateSnapshot(snapshot(devices), settings);
+    expect(result.state).toBe('idle');
+    expect(result.idleDevices).toBe(2);
+  });
+
+  it('counts idle devices even when overall scope reports busy', () => {
+    const devices = [device('0', 0, 0), device('1', 50, 1)];
+    const result = evaluateSnapshot(snapshot(devices), settings);
+    expect(result.state).toBe('busy');
+    expect(result.idleDevices).toBe(1);
+  });
 });
