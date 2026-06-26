@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { buildRemoteScanCommand, parseRemoteEnvelope } from '../src/collector.js';
 import {
   detectSshConfigPath,
+  detectSshExecutablePath,
   loadSshHosts,
   windowsPathToWsl,
   type SshEnvironment,
@@ -118,6 +119,20 @@ describe('SSH configuration and scan protocol', () => {
       .toBe('/mnt/c/Users/me/.ssh/config');
   });
 
+  it('throws when no SSH config file can be found', () => {
+    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-empty-'));
+    const environment: SshEnvironment = {
+      platform: 'linux',
+      isWsl: false,
+      homeDir,
+      username: 'test',
+      env: {},
+    };
+    expect(() => detectSshConfigPath('', '', environment)).toThrow(
+      'No SSH configuration file was found',
+    );
+  });
+
   it('builds direct WSL SSH arguments for aliases with parentheses', () => {
     const host: SshHost = {
       alias: '10.0.0.1(A3)',
@@ -134,6 +149,22 @@ describe('SSH configuration and scan protocol', () => {
     expect(args).toContain('UpdateHostKeys=no');
     expect(args).toContain('BatchMode=yes');
     expect(args.at(-1)).toBe('echo ok');
+  });
+
+  it('uses the alias directly when useAlias is true', () => {
+    const host: SshHost = {
+      alias: 'myserver',
+      hostname: '10.0.0.5',
+      user: 'root',
+      port: 22,
+      identityFiles: [],
+      configPath: '/tmp/config',
+      useAlias: true,
+    };
+    const args = buildSshArguments(host, 8, 'echo hi');
+    expect(args).toContain('myserver');
+    expect(args).not.toContain('root@10.0.0.5');
+    expect(args).not.toContain('-p');
   });
 
   it('builds interactive SSH terminal arguments without a remote command', () => {
@@ -197,4 +228,140 @@ describe('SSH configuration and scan protocol', () => {
       data: 'npu-smi data',
     });
   });
+
+  it('parses exporter source with endpoint URL from remote output', () => {
+    const envelope = parseRemoteEnvelope([
+      '__NPU_MONITOR_SOURCE__exporter|http://127.0.0.1:8080/metrics',
+      '__NPU_MONITOR_DATA_BEGIN__',
+      'metrics here',
+      '__NPU_MONITOR_DATA_END__',
+    ].join('\n'));
+    expect(envelope).toEqual({
+      source: 'exporter',
+      endpoint: 'http://127.0.0.1:8080/metrics',
+      data: 'metrics here',
+    });
+  });
+
+  it('throws when remote output has no source marker', () => {
+    expect(() => parseRemoteEnvelope('no marker here')).toThrow(
+      'did not contain a source marker',
+    );
+  });
+
+  it('throws when remote output has an unknown source', () => {
+    expect(() => parseRemoteEnvelope([
+      '__NPU_MONITOR_SOURCE__badvalue',
+      '__NPU_MONITOR_DATA_BEGIN__',
+      'data',
+      '__NPU_MONITOR_DATA_END__',
+    ].join('\n'))).toThrow('unknown source');
+  });
+
+  it('throws when remote output has no data section', () => {
+    expect(() => parseRemoteEnvelope('__NPU_MONITOR_SOURCE__npu-smi\nno data markers')).toThrow(
+      'did not contain a complete data section',
+    );
+  });
+
+  it('excludes hosts case-insensitively when loading config', () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-excl-'));
+    const configPath = path.join(directory, 'config');
+    writeFileSync(configPath, [
+      'Host alpha',
+      '  HostName 10.0.0.1',
+      '  User root',
+      'Host BETA',
+      '  HostName 10.0.0.2',
+      '  User root',
+      '',
+    ].join('\n'));
+    const environment: SshEnvironment = {
+      platform: 'linux',
+      isWsl: false,
+      homeDir: os.homedir(),
+      username: 'test',
+      env: {},
+    };
+    const loaded = loadSshHosts(
+      { ...settings, sshConfigPath: configPath, excludedHosts: ['beta'] },
+      environment,
+    );
+    expect(loaded.hosts.map(h => h.alias)).toEqual(['alpha']);
+  });
+
+  it('reports a warning when an Include directive is present', () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-inc-'));
+    const configPath = path.join(directory, 'config');
+    writeFileSync(configPath, [
+      'Include ~/.ssh/other',
+      'Host alpha',
+      '  HostName 10.0.0.1',
+      '',
+    ].join('\n'));
+    const environment: SshEnvironment = {
+      platform: 'linux',
+      isWsl: false,
+      homeDir: os.homedir(),
+      username: 'test',
+      env: {},
+    };
+    const loaded = loadSshHosts({ ...settings, sshConfigPath: configPath }, environment);
+    expect(loaded.warnings.some(w => w.includes('Include'))).toBe(true);
+  });
+
+  it('reports a warning when a Match section is present', () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-match-'));
+    const configPath = path.join(directory, 'config');
+    writeFileSync(configPath, [
+      'Host alpha',
+      '  HostName 10.0.0.1',
+      'Match host 10.*',
+      '  User admin',
+      '',
+    ].join('\n'));
+    const environment: SshEnvironment = {
+      platform: 'linux',
+      isWsl: false,
+      homeDir: os.homedir(),
+      username: 'test',
+      env: {},
+    };
+    const loaded = loadSshHosts({ ...settings, sshConfigPath: configPath }, environment);
+    expect(loaded.warnings.some(w => w.includes('Match'))).toBe(true);
+  });
+
+  it('returns platform-appropriate default SSH executable path', () => {
+    const linuxEnv: SshEnvironment = {
+      platform: 'linux',
+      isWsl: false,
+      homeDir: '/home/test',
+      username: 'test',
+      env: {},
+    };
+    expect(detectSshExecutablePath('', linuxEnv)).toBe('/usr/bin/ssh');
+
+    const winEnv: SshEnvironment = {
+      platform: 'win32',
+      isWsl: false,
+      homeDir: 'C:\\Users\\test',
+      username: 'test',
+      env: { SystemRoot: 'C:\\Windows' },
+    };
+    expect(detectSshExecutablePath('', winEnv)).toBe(
+      'C:\\Windows\\System32\\OpenSSH\\ssh.exe',
+    );
+  });
+
+  it('respects a custom SSH executable path', () => {
+    const environment: SshEnvironment = {
+      platform: 'linux',
+      isWsl: false,
+      homeDir: '/home/test',
+      username: 'test',
+      env: {},
+    };
+    expect(detectSshExecutablePath('/custom/ssh', environment)).toBe('/custom/ssh');
+  });
 });
+

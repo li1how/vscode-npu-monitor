@@ -19,6 +19,45 @@ export class EventEmitter<T> {
   }
 }
 
+export const TreeItemCollapsibleState = {
+  None: 0,
+  Collapsed: 1,
+  Expanded: 2,
+} as const;
+
+export class TreeItem {
+  public description?: string;
+  public iconPath?: unknown;
+  public contextValue?: string;
+  public id?: string;
+  public tooltip?: unknown;
+
+  public constructor(
+    public readonly label: string,
+    public readonly collapsibleState?: number,
+  ) {}
+}
+
+export class ThemeIcon {
+  public constructor(
+    public readonly id: string,
+    public readonly color?: unknown,
+  ) {}
+}
+
+export class ThemeColor {
+  public constructor(public readonly id: string) {}
+}
+
+export class MarkdownString {
+  public value = '';
+
+  public appendMarkdown(text: string): this {
+    this.value += text;
+    return this;
+  }
+}
+
 export const env = { remoteName: 'wsl' };
 
 export const l10n = {
@@ -101,3 +140,4 @@ export function resetVscodeMock(): void {
   createdTerminals.length = 0;
   terminalFailures.length = 0;
 }
+
