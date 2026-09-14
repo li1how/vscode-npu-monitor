@@ -14,6 +14,7 @@ interfaces that follow the VS Code language setting.
 - Prefer NPU-Exporter `/metrics` and quickly fall back to `npu-smi info`.
 - Display health, utilization, HBM, temperature, power, and NPU processes.
 - Monitor Docker containers with Dev Container and workspace directory filters.
+- Copy SSH host connection information from the host context menu.
 - Open running containers in a new window and copy container information.
 - Distinguish connection timeouts, authentication failures, host key errors,
   and collection failures.
@@ -83,7 +84,8 @@ archives in zip and tar.gz formats.
 3. Select the refresh icon in the view title to scan all hosts.
 4. Use the refresh icon on a host to scan it, or select multiple hosts and run
    **Scan Selected Hosts**.
-5. Use the terminal icon on a host to open an SSH terminal.
+5. Use the terminal icon on a host to open an SSH terminal. Right-click a host
+   to copy its connection information; multiple selected hosts are supported.
 6. Select the bell icon to subscribe to a host. It is scanned immediately and
    included in periodic polling.
 7. VS Code displays a notification when a subscribed host becomes idle.

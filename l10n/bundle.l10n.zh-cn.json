@@ -68,6 +68,7 @@
   "Invalid workspace paths: {0}. Use absolute Linux paths.": "有 {0} 个无效工作区路径，请使用 Linux 绝对路径。",
   "SSH host: {0}": "SSH 主机：{0}",
   "SSH target: {0}": "SSH 连接目标：{0}",
+  "Unable to copy host information: {0}": "无法复制主机信息：{0}",
   "Name: {0}": "名称：{0}",
   "Stale: {0}": "数据过期：{0}",
   "Select one or more containers first.": "请先选择一个或多个容器。",

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 
 import { devContainerDisplayName } from '../containers/metadata.js';
 import type { HostRecord } from '../types.js';
+import { formatSshTarget } from './hostActions.js';
 import { ContainerNode, type HostNode, type MonitorNode } from './nodes.js';
 
 export function formatContainerSummary(node: ContainerNode): string {
@@ -26,13 +27,11 @@ export function formatContainerSummary(node: ContainerNode): string {
 export function formatContainerInfo(node: ContainerNode): string {
   const { container, record } = node;
   const host = record.host;
-  const hostname = host.hostname.includes(':') ? '[' + host.hostname + ']' : host.hostname;
-  const target = (host.user ? host.user + '@' : '') + hostname + ':' + (host.port ?? 22);
   const updated = record.devContainers?.snapshot?.collectedAt;
   return [
     vscode.l10n.t('SSH config: {0}', host.configPath || '-'),
     vscode.l10n.t('SSH host: {0}', host.alias),
-    vscode.l10n.t('SSH target: {0}', target),
+    vscode.l10n.t('SSH target: {0}', formatSshTarget(host)),
     vscode.l10n.t('Name: {0}', devContainerDisplayName(container)),
     vscode.l10n.t('Docker name: {0}', container.name),
     vscode.l10n.t('Container ID: {0}', container.id),

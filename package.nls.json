@@ -33,6 +33,7 @@
   "configuration.devContainers.timeoutSeconds": "Container scan timeout in seconds, plus the SSH connection timeout.",
   "command.openDevContainer": "Open Container in New Window",
   "command.openSshWindow": "Open SSH Host in New Window",
+  "command.copyHostInfo": "Copy Host Information",
   "command.copyContainerInfo": "Copy Full Information",
   "configuration.containers.filterMode": "Choose which containers to display. Switching modes preserves saved workspace paths and does not start an SSH scan.",
   "configuration.containers.filterMode.all": "All Docker containers. Ignore saved workspace paths.",

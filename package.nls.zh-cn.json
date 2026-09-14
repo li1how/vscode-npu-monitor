@@ -33,6 +33,7 @@
   "configuration.devContainers.timeoutSeconds": "容器扫描超时秒数，另加 SSH 连接超时。",
   "command.openDevContainer": "在新窗口打开容器",
   "command.openSshWindow": "在新窗口中打开 SSH 主机",
+  "command.copyHostInfo": "复制主机信息",
   "command.copyContainerInfo": "复制完整信息",
   "configuration.containers.filterMode": "选择容器查看模式。切换模式保留已填写的工作区路径，不发起 SSH 扫描。",
   "configuration.containers.filterMode.all": "全部 Docker 容器，忽略已保存的工作区路径。",

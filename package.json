@@ -115,6 +115,11 @@
         "icon": "$(window)"
       },
       {
+        "command": "npuMonitor.copyHostInfo",
+        "title": "%command.copyHostInfo%",
+        "icon": "$(copy)"
+      },
+      {
         "command": "npuMonitor.copyContainerInfo",
         "title": "%command.copyContainerInfo%",
         "icon": "$(copy)"
@@ -193,6 +198,11 @@
           "command": "npuMonitor.openSshWindow",
           "when": "view == npuMonitor.hosts && viewItem =~ /^(npuHost|npuDevContainer)/",
           "group": "2_open@1"
+        },
+        {
+          "command": "npuMonitor.copyHostInfo",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
+          "group": "3_copy@1"
         },
         {
           "command": "npuMonitor.copyContainerSummary",

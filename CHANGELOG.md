@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Copy SSH host connection information from the host context menu.
+
 ## 0.2.0
 
 - Add Docker container monitoring with Dev Container and workspace directory filters.
