@@ -133,6 +133,9 @@ SSH 相关路径支持 `~`、`${env:NAME}` 和 Windows `%NAME%` 环境变量。W
 
 ## 开发相关
 
+开发和打包使用 Node.js 24 LTS。运行时类型与 VS Code 1.100 / Node.js 20 对齐，
+TypeScript 6 和 Vitest 4 保持工具链兼容。
+
 ### 目录结构
 
 ```text

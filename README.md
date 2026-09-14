@@ -153,6 +153,9 @@ the other modes ignore saved paths. Filter changes apply immediately to cached d
 
 ## Development
 
+Use Node.js 24 LTS for development and packaging. Runtime types remain aligned
+with VS Code 1.100 / Node.js 20; TypeScript 6 and Vitest 4 keep the toolchain compatible.
+
 ### Directory Structure
 
 ```text

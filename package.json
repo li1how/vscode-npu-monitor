@@ -367,7 +367,7 @@
   },
   "scripts": {
     "check-types": "tsc --noEmit",
-    "lint": "eslint src test scripts esbuild.mjs vitest.config.ts --no-error-on-unmatched-pattern",
+    "lint": "eslint src test scripts esbuild.mjs vitest.config.mts --no-error-on-unmatched-pattern",
     "test": "vitest run",
     "compile": "npm run check-types && node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
@@ -377,19 +377,17 @@
     "vsix": "node scripts/package-vsix.mjs"
   },
   "dependencies": {
-    "ssh-config": "^5.1.0"
+    "ssh-config": "^5.3.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.0.1",
-    "@types/vscode": "^1.100.0",
-    "@typescript-eslint/eslint-plugin": "^8.62.0",
-    "@typescript-eslint/parser": "^8.62.0",
+    "@types/node": "^20.19.43",
+    "@types/vscode": "1.100.0",
     "@vscode/vsce": "^3.9.2",
-    "esbuild": "^0.28.1",
-    "eslint": "^10.5.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.62.0",
-    "vitest": "^4.1.9"
+    "esbuild": "^0.28.2",
+    "eslint": "^10.10.0",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^4.1.11"
   }
 }
