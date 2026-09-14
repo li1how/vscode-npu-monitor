@@ -35,7 +35,7 @@
 npm install
 npm run check
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.1.1.vsix
+code --install-extension release/vscode-npu-monitor-0.2.0.vsix
 ```
 
 同一个 VSIX 可以安装到 Windows 本地 Extension Host 或 WSL Extension Host。
@@ -56,16 +56,16 @@ code .
 准备新版本时更新 `package.json`、`package-lock.json` 和 `CHANGELOG.md`：
 
 ```bash
-npm version 0.1.1 --no-git-tag-version
+npm version 0.2.0 --no-git-tag-version
 git add package.json package-lock.json CHANGELOG.md
-git commit -m "[Release] Prepare v0.1.1"
+git commit -m "[Release] Prepare v0.2.0"
 git push origin main
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
 ```
 
 发布附件名根据版本自动生成，例如
-`release/vscode-npu-monitor-0.1.1.vsix`。GitHub 同时提供源码 zip 和 tar.gz。
+`release/vscode-npu-monitor-0.2.0.vsix`。GitHub 同时提供源码 zip 和 tar.gz。
 
 ## 使用
 

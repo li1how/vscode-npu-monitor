@@ -39,7 +39,7 @@ subscription list.
 npm install
 npm run check
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.1.1.vsix
+code --install-extension release/vscode-npu-monitor-0.2.0.vsix
 ```
 
 The same VSIX can be installed in either a local Windows Extension Host or a
@@ -63,16 +63,16 @@ To prepare a new version, update `package.json`, `package-lock.json`, and
 `CHANGELOG.md`:
 
 ```bash
-npm version 0.1.1 --no-git-tag-version
+npm version 0.2.0 --no-git-tag-version
 git add package.json package-lock.json CHANGELOG.md
-git commit -m "[Release] Prepare v0.1.1"
+git commit -m "[Release] Prepare v0.2.0"
 git push origin main
-git tag -a v0.1.1 -m "v0.1.1"
-git push origin v0.1.1
+git tag -a v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
 ```
 
 The release asset name is generated from the package version, for example
-`release/vscode-npu-monitor-0.1.1.vsix`. GitHub also provides source code
+`release/vscode-npu-monitor-0.2.0.vsix`. GitHub also provides source code
 archives in zip and tar.gz formats.
 
 ## Usage

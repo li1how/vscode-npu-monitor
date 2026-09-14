@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
-- Refresh dependencies and CI tooling while preserving VS Code 1.100 compatibility.
 - Add Docker container monitoring with Dev Container and workspace directory filters.
 - Open running containers in a new window and copy summary or full information.
 - Organize source and test modules by responsibility and improve container tree rendering.
+- Refresh dependencies and CI tooling while preserving VS Code 1.100 compatibility.
 
 ## 0.1.1
 
