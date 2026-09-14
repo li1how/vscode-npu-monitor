@@ -1,4 +1,4 @@
-import type { NpuDevice, NpuProcess } from '../types.js';
+import type { NpuDevice, NpuProcess } from '../../types.js';
 
 interface PendingDevice {
   id: string;

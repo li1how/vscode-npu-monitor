@@ -66,6 +66,43 @@ export interface HostRecord {
   idleNotified: boolean;
   stale: boolean;
   error?: string;
+  devContainers?: DevContainerRecord;
+}
+
+export interface DevContainer {
+  id: string;
+  isDevContainer: boolean;
+  name: string;
+  displayName?: string;
+  image: string;
+  state: string;
+  createdAt: string;
+  startedAt?: string;
+  workspaceFolder?: string;
+  containerWorkspaceFolder?: string;
+  configFile?: string;
+}
+
+export type DevContainerState = 'unknown' | 'ready' | 'missingDocker' |
+  'permissionDenied' | 'daemonUnavailable' | SshCollectionError;
+
+type SshCollectionError = 'timeout' | 'authError' | 'hostKeyError' | 'unreachable' | 'error';
+
+export interface DevContainerSnapshot {
+  containers: DevContainer[];
+  collectedAt: number;
+  durationMs: number;
+}
+
+export interface DevContainerScanResult {
+  state: DevContainerState;
+  snapshot?: DevContainerSnapshot;
+  error?: string;
+}
+
+export interface DevContainerRecord extends DevContainerScanResult {
+  refreshing: boolean;
+  stale: boolean;
 }
 
 export interface MonitorSettings {
@@ -83,6 +120,10 @@ export interface MonitorSettings {
   idleRequireNoProcesses: boolean;
   idleUtilizationThresholdPercent: number;
   idleConsecutiveChecks: number;
+  devContainersEnabled: boolean;
+  devContainersTimeoutSeconds: number;
+  containerFilterMode: 'all' | 'devContainers' | 'workspacePaths';
+  containerWorkspacePaths: string[];
 }
 
 export interface ScanResult {

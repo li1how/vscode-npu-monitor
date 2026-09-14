@@ -2,12 +2,14 @@ import * as vscode from 'vscode';
 
 import { MonitorService, type ScanProgress } from './monitorService.js';
 import { getSettings } from './settings.js';
-import { currentSshEnvironment, detectSshExecutablePath } from './sshConfig.js';
-import { buildInteractiveSshArguments } from './sshRunner.js';
-import { HostNode, NpuTreeProvider, type DeviceNode } from './treeProvider.js';
+import { currentSshEnvironment, detectSshExecutablePath } from './ssh/config.js';
+import { buildInteractiveSshArguments } from './ssh/runner.js';
+import { copyContainerInfo, copyContainerSummary, openDevContainer, openSshWindow } from './ui/containerActions.js';
+import { HostNode, type ContainerNode, type MonitorNode } from './ui/nodes.js';
+import { NpuTreeProvider } from './ui/treeProvider.js';
 
 function aliasesFromSelection(
-  treeView: vscode.TreeView<HostNode | DeviceNode>,
+  treeView: vscode.TreeView<MonitorNode>,
   node?: HostNode,
 ): string[] {
   const selected = treeView.selection
@@ -140,6 +142,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       }
     }),
     vscode.commands.registerCommand('npuMonitor.openSshTerminal', openSshTerminal),
+    vscode.commands.registerCommand('npuMonitor.openSshWindow', openSshWindow),
+    vscode.commands.registerCommand('npuMonitor.copyContainerInfo', (node?: MonitorNode) =>
+      copyContainerInfo(treeView.selection, node)),
+    vscode.commands.registerCommand('npuMonitor.copyContainerSummary', (node?: MonitorNode) =>
+      copyContainerSummary(treeView.selection, node)),
+    vscode.commands.registerCommand('npuMonitor.openDevContainer', (node?: ContainerNode) =>
+      openDevContainer(node, async alias => {
+        await service.scanAliases([alias]);
+        return service.getRecord(alias);
+      })),
     vscode.commands.registerCommand('npuMonitor.selectSshConfig', async () => {
       const selected = await vscode.window.showOpenDialog({
         canSelectFiles: true,

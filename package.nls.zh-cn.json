@@ -28,5 +28,16 @@
   "configuration.idleScope.anyCard": "至少一张健康卡空闲。",
   "configuration.idleRequireNoProcesses": "判断空闲时要求卡上没有 NPU 进程。",
   "configuration.idleUtilizationThresholdPercent": "视为空闲的最大利用率百分比。",
-  "configuration.idleConsecutiveChecks": "报告空闲前需要连续满足条件的扫描次数。"
+  "configuration.idleConsecutiveChecks": "报告空闲前需要连续满足条件的扫描次数。",
+  "configuration.devContainers.enabled": "在选中或订阅的 SSH 主机上扫描容器，仅执行只读 Docker 查询。",
+  "configuration.devContainers.timeoutSeconds": "容器扫描超时秒数，另加 SSH 连接超时。",
+  "command.openDevContainer": "在新窗口打开容器",
+  "command.openSshWindow": "在新窗口中打开 SSH 主机",
+  "command.copyContainerInfo": "复制完整信息",
+  "configuration.containers.filterMode": "选择容器查看模式。切换模式保留已填写的工作区路径，不发起 SSH 扫描。",
+  "configuration.containers.filterMode.all": "全部 Docker 容器，忽略已保存的工作区路径。",
+  "configuration.containers.filterMode.devContainers": "全部带识别标签的 Dev Container，忽略已保存的工作区路径。",
+  "configuration.containers.filterMode.workspacePaths": "宿主机工作区匹配任一指定目录的 Dev Container；空列表显示全部 Dev Container。",
+  "configuration.containers.workspacePaths": "仅在 workspacePaths 模式生效的宿主机工作区目录。填写 Linux 绝对路径，区分大小写，匹配任一目录及其子目录；空列表显示全部 Dev Container。无效条目不匹配，不展开路径、变量或通配符。",
+  "command.copyContainerSummary": "复制精简信息"
 }

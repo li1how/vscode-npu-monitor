@@ -3,7 +3,7 @@ import type {
   HostState,
   MonitorSettings,
   NpuDevice,
-} from './types.js';
+} from '../types.js';
 
 export function isDeviceIdle(device: NpuDevice, settings: MonitorSettings): boolean {
   if (device.health !== 'OK' || device.utilizationPercent === undefined) {

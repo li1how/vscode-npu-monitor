@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add Docker container monitoring with Dev Container and workspace directory filters.
+- Open running containers in a new window and copy summary or full information.
+- Organize source and test modules by responsibility and improve container tree rendering.
+
 ## 0.1.1
 
 - Support `remote.SSH.configFile` when the NPU Monitor SSH config path is empty.

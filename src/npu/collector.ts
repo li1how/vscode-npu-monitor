@@ -2,15 +2,15 @@ import type * as vscode from 'vscode';
 
 import { parseNpuSmiInfo } from './parsers/npuSmi.js';
 import { parsePrometheusMetrics } from './parsers/prometheus.js';
-import { SshExecutionError } from './sshRunner.js';
-import type { SshRunner } from './sshRunner.js';
+import { SshExecutionError } from '../ssh/runner.js';
+import type { SshRunner } from '../ssh/runner.js';
 import type {
   HostSnapshot,
   HostState,
   MonitorSettings,
   ScanResult,
   SshHost,
-} from './types.js';
+} from '../types.js';
 
 const SOURCE_MARKER = '__NPU_MONITOR_SOURCE__';
 const DATA_BEGIN = '__NPU_MONITOR_DATA_BEGIN__';

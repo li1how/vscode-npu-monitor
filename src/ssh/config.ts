@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import SSHConfig, { LineType, type Directive, type Line, type Section } from 'ssh-config';
 
-import type { MonitorSettings, SshHost } from './types.js';
+import type { MonitorSettings, SshHost } from '../types.js';
 
 export interface SshEnvironment {
   platform: NodeJS.Platform;

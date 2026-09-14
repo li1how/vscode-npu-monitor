@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { openSshTerminal } from '../src/extension.js';
-import { currentSshEnvironment, detectSshExecutablePath } from '../src/sshConfig.js';
+import { currentSshEnvironment, detectSshExecutablePath } from '../src/ssh/config.js';
 import type { HostRecord } from '../src/types.js';
-import { HostNode } from '../src/treeProvider.js';
+import { HostNode } from '../src/ui/nodes.js';
 import {
   configurationValues,
   createdTerminals,

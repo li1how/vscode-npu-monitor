@@ -28,5 +28,16 @@
   "configuration.idleScope.anyCard": "At least one healthy card must be idle.",
   "configuration.idleRequireNoProcesses": "Require no NPU process when deciding whether a card is idle.",
   "configuration.idleUtilizationThresholdPercent": "Maximum utilization percentage considered idle.",
-  "configuration.idleConsecutiveChecks": "Consecutive qualifying scans required before reporting idle."
+  "configuration.idleConsecutiveChecks": "Consecutive qualifying scans required before reporting idle.",
+  "configuration.devContainers.enabled": "Scan containers on each selected or subscribed SSH host. Only read-only Docker queries are executed.",
+  "configuration.devContainers.timeoutSeconds": "Container scan timeout in seconds, plus the SSH connection timeout.",
+  "command.openDevContainer": "Open Container in New Window",
+  "command.openSshWindow": "Open SSH Host in New Window",
+  "command.copyContainerInfo": "Copy Full Information",
+  "configuration.containers.filterMode": "Choose which containers to display. Switching modes preserves saved workspace paths and does not start an SSH scan.",
+  "configuration.containers.filterMode.all": "All Docker containers. Ignore saved workspace paths.",
+  "configuration.containers.filterMode.devContainers": "All labeled Dev Containers. Ignore saved workspace paths.",
+  "configuration.containers.filterMode.workspacePaths": "Dev Containers whose host workspace matches any saved directory. An empty list shows all Dev Containers.",
+  "configuration.containers.workspacePaths": "Host workspace directories for workspacePaths mode only. Match any absolute Linux directory or its descendants, case-sensitively. Empty means all Dev Containers. Invalid entries do not match. Paths, variables and wildcards are not expanded.",
+  "command.copyContainerSummary": "Copy Summary"
 }

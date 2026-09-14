@@ -3,11 +3,11 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { parseNpuSmiInfo } from '../src/parsers/npuSmi.js';
-import { parsePrometheusMetrics } from '../src/parsers/prometheus.js';
+import { parseNpuSmiInfo } from '../../src/npu/parsers/npuSmi.js';
+import { parsePrometheusMetrics } from '../../src/npu/parsers/prometheus.js';
 
 function fixture(name: string): string {
-  return readFileSync(path.join(__dirname, 'fixtures', name), 'utf8');
+  return readFileSync(path.join(__dirname, '..', 'fixtures', name), 'utf8');
 }
 
 describe('NPU status parsers', () => {

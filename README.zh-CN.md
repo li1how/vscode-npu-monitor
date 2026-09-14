@@ -2,8 +2,8 @@
 
 [English](README.md) | 简体中文
 
-通过 SSH 监控多台机器上的 Ascend NPU 状态，支持 Windows VS Code 和 WSL
-VS Code。界面语言跟随 VS Code 的中文或英文设置。
+通过 SSH 监控多台机器上的 Ascend NPU 和 Docker 容器，支持 Windows VS Code
+和 WSL VS Code。界面语言跟随 VS Code 的中文或英文设置。
 
 ## 功能
 
@@ -12,6 +12,8 @@ VS Code。界面语言跟随 VS Code 的中文或英文设置。
 - 订阅机器空闲提醒，并按可配置周期自动扫描已订阅机器。
 - 优先读取 NPU-Exporter `/metrics`，不可用时快速回退到 `npu-smi info`。
 - 展示健康状态、利用率、HBM、温度、功耗和 NPU 进程。
+- 监控 Docker 容器，支持按 Dev Container 和工作区目录筛选。
+- 在新窗口打开运行中的容器，快速复制容器信息。
 - 区分连接超时、认证失败、主机密钥异常和采集失败。
 
 自动扫描只访问已订阅机器。手动扫描不会修改订阅列表。
@@ -24,6 +26,8 @@ VS Code。界面语言跟随 VS Code 的中文或英文设置。
 - Windows OpenSSH Client，或 WSL 中的 `/usr/bin/ssh`。
 - SSH config 中配置的机器可以免密执行远端只读命令。
 - 远端机器安装 `npu-smi`，或运行可访问的 NPU-Exporter。
+- 容器监控需要远端 SSH 用户有 Docker 查询权限，本地无需安装 Docker。
+- 打开容器需要在本地 VS Code 安装 Dev Containers 和 Remote - SSH。
 
 ## 构建和安装
 
@@ -69,18 +73,16 @@ git push origin v0.1.1
 2. 首次进入时扩展只加载 SSH config，不自动扫描全部机器。
 3. 点击标题栏刷新图标扫描全部机器。
 4. 使用机器行的刷新图标扫描单台；多选机器后执行“扫描所选机器”。
-5. 使用机器行的终端图标打开 VS Code 终端，并通过 OpenSSH 连接对应机器。
+5. 使用机器行的终端图标打开 SSH 终端。
 6. 点击铃铛订阅机器；订阅后立即扫描，并仅对订阅机器定时轮询。
 7. 机器达到空闲条件时显示 VS Code 通知。
+8. 展开机器查看 NPU 和容器状态；点击运行中容器的新窗口图标，在独立窗口附加容器。
+9. 容器行的复制图标用于“复制精简信息”，右键菜单提供“复制完整信息”，均支持多选。
 
-每台机器在一次 SSH 会话中完成：
+扫描先采集 NPU 数据，再执行只读 Docker 查询。默认展示 Dev Container，并优先使用
+配置中的项目名称。采集失败时保留上次成功的数据并标记“数据已过期”。
 
-1. 精确检查 `npu-exporter` / `npu_exporter` 进程，同时检查 `npu-smi` 路径。
-2. Exporter 存在时在总计 2 秒内探测最多两个 `/metrics` 端点。
-3. Exporter 不存在或指标不可用时立即执行 `npu-smi info`。
-4. 将结果统一为机器和 NPU 状态。
-
-扫描不会执行 `systemctl`、全盘查找、Docker、Kubernetes 或全端口探测。
+打开容器时，Remote - SSH 需使用与 NPU Monitor 一致的 SSH 配置和主机别名。
 
 ## 配置
 
@@ -96,24 +98,74 @@ git push origin v0.1.1
 | `npuSmiTimeoutSeconds` | `10` | `npu-smi info` 超时 |
 | `maxConcurrentHosts` | `6` | 手动和自动扫描并发数 |
 | `excludedHosts` | `[]` | 不显示、不扫描的 Host 别名 |
+| `devContainers.enabled` | `true` | 启用容器监控 |
+| `devContainers.timeoutSeconds` | `5` | 容器查询超时，不含 SSH 连接时间 |
+| `containers.filterMode` | `devContainers` | `all` 全部容器、`devContainers` 或 `workspacePaths` 工作区筛选 |
+| `containers.workspacePaths` | `[]` | 宿主机工作区目录，仅在 `workspacePaths` 模式生效 |
 | `pollIntervalSeconds` | `60` | 订阅轮询周期，最小 10 秒 |
 | `idleScope` | `allCards` | 要求全部卡或任一卡空闲 |
 | `idleRequireNoProcesses` | `true` | 空闲时要求没有 NPU 进程 |
 | `idleUtilizationThresholdPercent` | `1` | 空闲利用率上限 |
 | `idleConsecutiveChecks` | `1` | 空闲提醒前连续满足次数 |
 
-路径支持 `~`、`${env:NAME}` 和 Windows `%NAME%` 环境变量。WSL 读取 Windows
+SSH 相关路径支持 `~`、`${env:NAME}` 和 Windows `%NAME%` 环境变量。WSL 读取 Windows
 配置时会自动转换 NPU Monitor 和 Remote - SSH 设置中的 `C:\...` 路径。
+
+在 `workspacePaths` 模式下，填写一个或多个**宿主机** Linux 绝对目录，匹配该目录
+及其子目录，区分大小写，不展开 `~`、变量或通配符。空列表显示全部 Dev Container，
+其他模式忽略已保存的路径。筛选修改立即作用于缓存数据。
+
+```json
+{
+  "npuMonitor.containers.filterMode": "workspacePaths",
+  "npuMonitor.containers.workspacePaths": ["/home/user", "/mnt/work/user"]
+}
+```
 
 ## 安全行为
 
 - 始终启用 OpenSSH 主机密钥校验。
-- 不自动接受新密钥，不修改 `known_hosts`。
+- 不自动接受新密钥，不修改用户的 SSH config、`known_hosts` 或密钥。
 - 扫描使用 `BatchMode=yes`，不会弹出密码输入。
 - 交互式 SSH 终端可以在终端中提示输入，但仍启用主机密钥校验并禁用主机密钥更新。
+- 不采集容器环境变量和无关标签。
 - 不把机器地址、用户名、SSH 配置或密钥打包进 VSIX。
 
-## 开发命令
+## 开发相关
+
+### 目录结构
+
+```text
+src/
+  extension.ts       # 扩展入口与命令注册
+  settings.ts        # 配置读取
+  types.ts           # 共享数据类型
+  monitorService.ts  # 订阅、扫描调度和缓存
+  ssh/               # SSH 配置与执行
+  npu/               # NPU 采集、解析和空闲判断
+  containers/        # 容器采集、元数据和筛选
+  ui/                # 树视图与操作命令
+test/                # 自动测试
+  ssh/
+  npu/
+  containers/
+  ui/
+  extension.test.ts
+  monitorService.test.ts
+  fixtures/          # 共享样本
+  mocks/             # 共享模拟对象
+scripts/             # 打包脚本
+l10n/                # 界面翻译
+media/               # 图标和演示资源
+```
+
+### 开发约定
+
+- 同时支持 Windows 原生 OpenSSH 和 WSL `/usr/bin/ssh`，跨平台差异应有测试覆盖。
+- 命令、配置和文档保持中英文一致。
+- 提交信息使用简短英文，格式为 `[Tag] Brief description`。
+
+### 开发命令
 
 ```bash
 npm run check-types

@@ -56,9 +56,24 @@ export class MarkdownString {
     this.value += text;
     return this;
   }
+
+  public appendText(text: string): this {
+    this.value += text.replace(/[\\`*_{}[\]()<>#+.!|]/g, '\\$&');
+    return this;
+  }
 }
 
-export const env = { remoteName: 'wsl' };
+export const clipboardWrites: string[] = [];
+export const clipboardFailures: unknown[] = [];
+export const env = {
+  remoteName: 'wsl',
+  clipboard: {
+    async writeText(value: string): Promise<void> {
+      if (clipboardFailures.length) throw clipboardFailures.shift();
+      clipboardWrites.push(value);
+    },
+  },
+};
 
 export const l10n = {
   t(template: string, ...values: unknown[]): string {
@@ -71,6 +86,10 @@ export const l10n = {
 export const informationMessages: string[] = [];
 export const errorMessages: string[] = [];
 export const executedCommands: string[] = [];
+export const commandCalls: Array<{ command: string; args: unknown[] }> = [];
+export const availableCommands = [
+  'remote-containers.attachToRunningContainer', 'opensshremotes.openEmptyWindow',
+];
 export const commandFailures = new Map<string, unknown>();
 export const configurationValues = new Map<string, unknown>();
 export const createdTerminals: Array<{
@@ -122,8 +141,12 @@ export const workspace = {
 };
 
 export const commands = {
-  async executeCommand(command: string): Promise<undefined> {
+  async getCommands(): Promise<string[]> {
+    return [...availableCommands];
+  },
+  async executeCommand(command: string, ...args: unknown[]): Promise<undefined> {
     executedCommands.push(command);
+    commandCalls.push({ command, args });
     if (commandFailures.has(command)) {
       throw commandFailures.get(command);
     }
@@ -131,13 +154,23 @@ export const commands = {
   },
 };
 
+export const Uri = {
+  from(components: { scheme: string; authority: string; path: string }): typeof components {
+    return { ...components };
+  },
+};
+
 export function resetVscodeMock(): void {
+  clipboardWrites.length = 0;
+  clipboardFailures.length = 0;
   informationMessages.length = 0;
   errorMessages.length = 0;
   executedCommands.length = 0;
+  commandCalls.length = 0;
+  availableCommands.splice(0, availableCommands.length,
+    'remote-containers.attachToRunningContainer', 'opensshremotes.openEmptyWindow');
   commandFailures.clear();
   configurationValues.clear();
   createdTerminals.length = 0;
   terminalFailures.length = 0;
 }
-

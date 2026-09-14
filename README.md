@@ -2,9 +2,9 @@
 
 English | [简体中文](README.zh-CN.md)
 
-Monitor Ascend NPU status across multiple SSH hosts from VS Code. The extension
-supports both native Windows OpenSSH and WSL OpenSSH, and its interface follows
-the language configured in VS Code.
+Monitor Ascend NPUs and Docker containers across multiple SSH hosts from VS Code.
+The extension supports native Windows and WSL OpenSSH, with Chinese and English
+interfaces that follow the VS Code language setting.
 
 ## Features
 
@@ -13,6 +13,8 @@ the language configured in VS Code.
 - Subscribe to idle notifications and poll only subscribed hosts automatically.
 - Prefer NPU-Exporter `/metrics` and quickly fall back to `npu-smi info`.
 - Display health, utilization, HBM, temperature, power, and NPU processes.
+- Monitor Docker containers with Dev Container and workspace directory filters.
+- Open running containers in a new window and copy container information.
 - Distinguish connection timeouts, authentication failures, host key errors,
   and collection failures.
 
@@ -28,6 +30,8 @@ subscription list.
 - Passwordless access to the hosts configured in the SSH configuration file.
 - `npu-smi` installed on each remote host, or an accessible NPU-Exporter
   process running there.
+- For container monitoring: Docker access for the remote SSH user; no local Docker required.
+- To open containers: Dev Containers and Remote - SSH installed in local VS Code.
 
 ## Build and Install
 
@@ -79,24 +83,21 @@ archives in zip and tar.gz formats.
 3. Select the refresh icon in the view title to scan all hosts.
 4. Use the refresh icon on a host to scan it, or select multiple hosts and run
    **Scan Selected Hosts**.
-5. Use the terminal icon on a host to open a VS Code terminal connected to that
-   host with OpenSSH.
+5. Use the terminal icon on a host to open an SSH terminal.
 6. Select the bell icon to subscribe to a host. It is scanned immediately and
    included in periodic polling.
 7. VS Code displays a notification when a subscribed host becomes idle.
+8. Expand a host to view NPU and container status. Use a running container's
+   new-window icon to attach in a separate VS Code window.
+9. Use a container's copy icon for **Copy Summary**, or the context menu for
+   **Copy Full Information**. Both support multiple selected containers.
 
-Each host scan uses one SSH session to:
+Scans collect NPU data first, followed by read-only Docker queries. Dev Containers
+are shown by default and use the configured project name when available. Failed
+scans retain the last successful data with a **Stale** marker.
 
-1. Check exact `npu-exporter` / `npu_exporter` process names and locate
-   `npu-smi` at the same time.
-2. Probe at most two Exporter `/metrics` endpoints within a total of two
-   seconds.
-3. Run `npu-smi info` immediately when Exporter is absent or its metrics are
-   unusable.
-4. Normalize the result into host and NPU status data.
-
-The scan never runs `systemctl`, filesystem-wide searches, Docker, Kubernetes,
-or full port scans.
+Remote - SSH must use the same SSH configuration and host aliases as NPU Monitor
+when opening a container.
 
 ## Configuration
 
@@ -112,28 +113,79 @@ Search for `NPU Monitor` in VS Code settings:
 | `npuSmiTimeoutSeconds` | `10` | `npu-smi info` timeout |
 | `maxConcurrentHosts` | `6` | Maximum concurrent manual or automatic scans |
 | `excludedHosts` | `[]` | Host aliases that are hidden and never scanned |
+| `devContainers.enabled` | `true` | Enable container monitoring |
+| `devContainers.timeoutSeconds` | `5` | Container query timeout, excluding SSH connection time |
+| `containers.filterMode` | `devContainers` | Show `all` Docker containers, `devContainers`, or filter by `workspacePaths` |
+| `containers.workspacePaths` | `[]` | Host workspace directories used only in `workspacePaths` mode |
 | `pollIntervalSeconds` | `60` | Subscription polling interval, minimum 10 seconds |
 | `idleScope` | `allCards` | Require all cards or any card to be idle |
 | `idleRequireNoProcesses` | `true` | Require no NPU processes when determining idle state |
 | `idleUtilizationThresholdPercent` | `1` | Maximum utilization considered idle |
 | `idleConsecutiveChecks` | `1` | Consecutive idle checks required before notification |
 
-Paths support `~`, `${env:NAME}`, and Windows `%NAME%` environment variables.
+SSH-related paths support `~`, `${env:NAME}`, and Windows `%NAME%` environment variables.
 When WSL reads a Windows configuration, Windows paths such as `C:\...` are
 converted automatically for both NPU Monitor and Remote - SSH settings.
+
+In `workspacePaths` mode, set one or more absolute Linux directories on the
+**host**. Paths match the directory and its descendants, are case-sensitive, and
+do not expand `~`, variables, or wildcards. An empty list shows all Dev Containers;
+the other modes ignore saved paths. Filter changes apply immediately to cached data.
+
+```json
+{
+  "npuMonitor.containers.filterMode": "workspacePaths",
+  "npuMonitor.containers.workspacePaths": ["/home/user", "/mnt/work/user"]
+}
+```
 
 ## Security
 
 - OpenSSH host key verification is always enabled.
 - The extension never accepts new host keys automatically or modifies
-  `known_hosts`.
+  SSH config, `known_hosts`, or keys.
 - Scans use `BatchMode=yes` to prevent password prompts.
 - Interactive SSH terminals may prompt inside the terminal, but still keep host
   key verification enabled and disable host key updates.
+- Container environment variables and unrelated labels are not collected.
 - Machine addresses, usernames, SSH configurations, and keys are never bundled
   into the VSIX.
 
-## Development Commands
+## Development
+
+### Directory Structure
+
+```text
+src/
+  extension.ts       # Activation and command registration
+  settings.ts        # Settings
+  types.ts           # Shared data types
+  monitorService.ts  # Subscriptions, scheduling, and cached state
+  ssh/               # SSH configuration and execution
+  npu/               # NPU collection, parsing, and idle detection
+  containers/        # Container collection, metadata, and filtering
+  ui/                # Tree view and actions
+test/                # Automated tests
+  ssh/
+  npu/
+  containers/
+  ui/
+  extension.test.ts
+  monitorService.test.ts
+  fixtures/          # Shared samples
+  mocks/             # Shared mocks
+scripts/             # Packaging scripts
+l10n/                # Interface translations
+media/               # Icons and demo assets
+```
+
+### Development Guidelines
+
+- Support native Windows OpenSSH and WSL `/usr/bin/ssh`; cover platform differences in tests.
+- Keep commands, settings, and documentation consistent in Chinese and English.
+- Use short English commit messages in the form `[Tag] Brief description`.
+
+### Development Commands
 
 ```bash
 npm run check-types

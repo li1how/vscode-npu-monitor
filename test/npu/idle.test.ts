@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { evaluateSnapshot, isDeviceIdle } from '../src/idle.js';
-import type { HostSnapshot, MonitorSettings, NpuDevice } from '../src/types.js';
+import { evaluateSnapshot, isDeviceIdle } from '../../src/npu/idle.js';
+import type { HostSnapshot, MonitorSettings, NpuDevice } from '../../src/types.js';
 
 const settings: MonitorSettings = {
   sshConfigPath: '',
@@ -17,6 +17,10 @@ const settings: MonitorSettings = {
   idleScope: 'allCards',
   idleRequireNoProcesses: true,
   idleUtilizationThresholdPercent: 1,
+  devContainersEnabled: false,
+  devContainersTimeoutSeconds: 5,
+  containerFilterMode: 'devContainers',
+  containerWorkspacePaths: [],
   idleConsecutiveChecks: 1,
 };
 

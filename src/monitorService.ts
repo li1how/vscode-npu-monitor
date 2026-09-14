@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 
-import { NpuCollector } from './collector.js';
-import { evaluateSnapshot } from './idle.js';
+import { DevContainerCollector } from './containers/collector.js';
+import { NpuCollector } from './npu/collector.js';
+import { evaluateSnapshot } from './npu/idle.js';
 import { getSettings } from './settings.js';
-import { currentSshEnvironment, loadSshHosts } from './sshConfig.js';
-import { SshRunner } from './sshRunner.js';
+import { currentSshEnvironment, loadSshHosts } from './ssh/config.js';
+import { SshRunner } from './ssh/runner.js';
 import type { HostRecord, SshHost } from './types.js';
 
 const SUBSCRIPTIONS_KEY = 'npuMonitor.subscriptions';
@@ -20,6 +21,7 @@ export class MonitorService implements vscode.Disposable {
   private readonly inFlight = new Map<string, Promise<void>>();
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   private collector?: NpuCollector;
+  private devContainerCollector?: DevContainerCollector;
   private pollTimer?: NodeJS.Timeout;
   private automaticScanRunning = false;
   private subscriptions = new Set<string>();
@@ -65,13 +67,12 @@ export class MonitorService implements vscode.Disposable {
       for (const host of loaded.hosts) {
         const existing = this.records.get(host.alias);
         this.records.set(host.alias, existing
-          ? {
-              ...existing,
+          ? Object.assign(existing, {
               host,
               subscribed: this.subscriptions.has(host.alias),
               state: existing.state === 'missingConfig' ? 'unknown' : existing.state,
               error: existing.state === 'missingConfig' ? undefined : existing.error,
-            }
+            })
           : this.newRecord(host));
       }
       for (const [alias, record] of this.records) {
@@ -85,11 +86,14 @@ export class MonitorService implements vscode.Disposable {
           }
         }
       }
+      const runner = new SshRunner({
+        executablePath: loaded.sshExecutablePath,
+        connectTimeoutSeconds: settings.connectTimeoutSeconds,
+      });
+      this.devContainerCollector = settings.devContainersEnabled
+        ? new DevContainerCollector(runner, settings) : undefined;
       this.collector = new NpuCollector(
-        new SshRunner({
-          executablePath: loaded.sshExecutablePath,
-          connectTimeoutSeconds: settings.connectTimeoutSeconds,
-        }),
+        runner,
         settings,
         message => this.log(message),
       );
@@ -269,9 +273,10 @@ export class MonitorService implements vscode.Disposable {
     record.error = undefined;
     this.changeEmitter.fire();
     this.log(record.host.alias + ': scan started');
+    const containerCollector = this.devContainerCollector;
     const result = await this.collector.scan(record.host, token);
-    record.refreshing = false;
     if (token?.isCancellationRequested) {
+      record.refreshing = false;
       this.changeEmitter.fire();
       return;
     }
@@ -297,7 +302,7 @@ export class MonitorService implements vscode.Disposable {
       );
       if (record.subscribed && record.state === 'idle' && !record.idleNotified) {
         record.idleNotified = true;
-        await this.notifyIdle(record);
+        void this.notifyIdle(record).catch(error => this.log('Idle notification failed: ' + String(error)));
       }
     } else {
       record.state = result.state;
@@ -307,6 +312,32 @@ export class MonitorService implements vscode.Disposable {
       record.idleNotified = false;
       this.log(record.host.alias + ': ' + result.state + ' - ' + (result.error ?? 'unknown error'));
     }
+    this.changeEmitter.fire();
+    if (containerCollector && getSettings().devContainersEnabled && !token?.isCancellationRequested) {
+      const previous = record.devContainers;
+      record.devContainers = {
+        state: previous?.state ?? 'unknown',
+        snapshot: previous?.snapshot,
+        refreshing: true,
+        stale: previous?.stale ?? false,
+      };
+      this.changeEmitter.fire();
+      const containers = await containerCollector.scan(record.host, token);
+      if (!token?.isCancellationRequested) {
+        record.devContainers = {
+          ...containers,
+          snapshot: containers.snapshot ?? previous?.snapshot,
+          refreshing: false,
+          stale: !containers.snapshot && Boolean(previous?.snapshot),
+        };
+        this.log(record.host.alias + ': Dev Containers ' + containers.state +
+          (containers.snapshot ? ' (' + containers.snapshot.containers.length + ')' : '') +
+          (containers.error ? ' - ' + containers.error : ''));
+      } else {
+        record.devContainers = previous;
+      }
+    }
+    record.refreshing = false;
     this.changeEmitter.fire();
   }
 

@@ -4,16 +4,16 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildRemoteScanCommand, parseRemoteEnvelope } from '../src/collector.js';
+import { buildRemoteScanCommand, parseRemoteEnvelope } from '../../src/npu/collector.js';
 import {
   detectSshConfigPath,
   detectSshExecutablePath,
   loadSshHosts,
   windowsPathToWsl,
   type SshEnvironment,
-} from '../src/sshConfig.js';
-import { buildInteractiveSshArguments, buildSshArguments } from '../src/sshRunner.js';
-import type { MonitorSettings, SshHost } from '../src/types.js';
+} from '../../src/ssh/config.js';
+import { buildInteractiveSshArguments, buildSshArguments } from '../../src/ssh/runner.js';
+import type { MonitorSettings, SshHost } from '../../src/types.js';
 
 const settings: MonitorSettings = {
   sshConfigPath: '',
@@ -29,6 +29,10 @@ const settings: MonitorSettings = {
   idleScope: 'allCards',
   idleRequireNoProcesses: true,
   idleUtilizationThresholdPercent: 1,
+  devContainersEnabled: false,
+  devContainersTimeoutSeconds: 5,
+  containerFilterMode: 'devContainers',
+  containerWorkspacePaths: [],
   idleConsecutiveChecks: 1,
 };
 

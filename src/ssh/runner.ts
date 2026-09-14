@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 
 import type * as vscode from 'vscode';
 
-import type { SshHost } from './types.js';
+import type { SshHost } from '../types.js';
 
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
 

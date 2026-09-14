@@ -10,6 +10,8 @@ function numberSetting(config: vscode.WorkspaceConfiguration, key: string, fallb
 export function getSettings(): MonitorSettings {
   const config = vscode.workspace.getConfiguration('npuMonitor');
   const remoteSshConfig = vscode.workspace.getConfiguration('remote.SSH');
+  const mode = config.get<string>('containers.filterMode', 'devContainers');
+  const paths = config.get<unknown>('containers.workspacePaths', []);
   return {
     sshConfigPath: config.get<string>('sshConfigPath', '').trim(),
     remoteSshConfigFile: remoteSshConfig.get<string>('configFile', '').trim(),
@@ -25,5 +27,12 @@ export function getSettings(): MonitorSettings {
     idleRequireNoProcesses: config.get<boolean>('idleRequireNoProcesses', true),
     idleUtilizationThresholdPercent: numberSetting(config, 'idleUtilizationThresholdPercent', 1),
     idleConsecutiveChecks: Math.max(1, Math.floor(numberSetting(config, 'idleConsecutiveChecks', 1))),
+    devContainersEnabled: config.get<boolean>('devContainers.enabled', true),
+    containerFilterMode: mode === 'all' || mode === 'workspacePaths' ? mode : 'devContainers',
+    // Invalid input must not turn a requested path filter into an unfiltered list.
+    containerWorkspacePaths: Array.isArray(paths)
+      ? paths.map(value => typeof value === 'string' ? value : '') : [''],
+    devContainersTimeoutSeconds: Math.min(60, Math.max(1,
+      Math.floor(numberSetting(config, 'devContainers.timeoutSeconds', 5)))),
   };
 }

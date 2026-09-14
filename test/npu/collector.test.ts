@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import { NpuCollector } from '../src/collector.js';
-import { SshExecutionError } from '../src/sshRunner.js';
-import type { MonitorSettings, SshHost } from '../src/types.js';
+import { NpuCollector } from '../../src/npu/collector.js';
+import { SshExecutionError } from '../../src/ssh/runner.js';
+import type { MonitorSettings, SshHost } from '../../src/types.js';
 
 const settings: MonitorSettings = {
   sshConfigPath: '',
@@ -18,6 +18,10 @@ const settings: MonitorSettings = {
   idleScope: 'allCards',
   idleRequireNoProcesses: true,
   idleUtilizationThresholdPercent: 1,
+  devContainersEnabled: false,
+  devContainersTimeoutSeconds: 5,
+  containerFilterMode: 'devContainers',
+  containerWorkspacePaths: [],
   idleConsecutiveChecks: 1,
 };
 
