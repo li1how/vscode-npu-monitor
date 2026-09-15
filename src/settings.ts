@@ -12,6 +12,7 @@ export function getSettings(): MonitorSettings {
   const remoteSshConfig = vscode.workspace.getConfiguration('remote.SSH');
   const mode = config.get<string>('containers.filterMode', 'devContainers');
   const paths = config.get<unknown>('containers.workspacePaths', []);
+  const workspaceFile = config.get<unknown>('containers.workspaceFile', '');
   return {
     sshConfigPath: config.get<string>('sshConfigPath', '').trim(),
     remoteSshConfigFile: remoteSshConfig.get<string>('configFile', '').trim(),
@@ -32,6 +33,7 @@ export function getSettings(): MonitorSettings {
     // Invalid input must not turn a requested path filter into an unfiltered list.
     containerWorkspacePaths: Array.isArray(paths)
       ? paths.map(value => typeof value === 'string' ? value : '') : [''],
+    containerWorkspaceFile: typeof workspaceFile === 'string' ? workspaceFile.trim() : String(workspaceFile),
     devContainersTimeoutSeconds: Math.min(60, Math.max(1,
       Math.floor(numberSetting(config, 'devContainers.timeoutSeconds', 5)))),
   };

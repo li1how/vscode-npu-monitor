@@ -119,6 +119,7 @@ Search for `NPU Monitor` in VS Code settings:
 | `devContainers.timeoutSeconds` | `5` | Container query timeout, excluding SSH connection time |
 | `containers.filterMode` | `devContainers` | Show `all` Docker containers, `devContainers`, or filter by `workspacePaths` |
 | `containers.workspacePaths` | `[]` | Host workspace directories used only in `workspacePaths` mode |
+| `containers.workspaceFile` | Empty | Workspace file name to open instead of the mapped container workspace folder |
 | `pollIntervalSeconds` | `60` | Subscription polling interval, minimum 10 seconds |
 | `idleScope` | `allCards` | Require all cards or any card to be idle |
 | `idleRequireNoProcesses` | `true` | Require no NPU processes when determining idle state |
@@ -140,6 +141,13 @@ the other modes ignore saved paths. Filter changes apply immediately to cached d
   "npuMonitor.containers.workspacePaths": ["/home/user", "/mnt/work/user"]
 }
 ```
+
+Set `containers.workspaceFile` to a file name such as
+`vllm-ascend-dev.code-workspace` to open that file from the root of every mapped
+container workspace. Leave it empty to keep opening the workspace folder. The name
+must end in `.code-workspace` and cannot contain path separators; variables and
+wildcards are not expanded. Scans only check whether the file is a regular file and
+do not read its contents. Opening reports an error if the configured file is missing.
 
 ## Security
 

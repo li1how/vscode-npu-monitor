@@ -134,7 +134,7 @@ describe('monitor scan orchestration', () => {
       idleUtilizationThresholdPercent: 1,
       devContainersEnabled: false,
       devContainersTimeoutSeconds: 5,
-      containerFilterMode: 'devContainers', containerWorkspacePaths: [],
+      containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
       idleConsecutiveChecks: 1,
     };
   });
@@ -231,7 +231,7 @@ describe('Dev Container scan orchestration', () => {
       excludedHosts: [], pollIntervalSeconds: 60, idleScope: 'allCards',
       idleRequireNoProcesses: true, idleUtilizationThresholdPercent: 1,
       idleConsecutiveChecks: 1, devContainersEnabled: true, devContainersTimeoutSeconds: 5,
-      containerFilterMode: 'devContainers', containerWorkspacePaths: [],
+      containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
     };
   });
 

@@ -22,6 +22,7 @@ const settings: MonitorSettings = {
   devContainersTimeoutSeconds: 5,
   containerFilterMode: 'devContainers',
   containerWorkspacePaths: [],
+  containerWorkspaceFile: '',
   idleConsecutiveChecks: 1,
 };
 

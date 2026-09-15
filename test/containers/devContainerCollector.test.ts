@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -64,8 +64,10 @@ describe('Dev Container collection', () => {
       ...metadata, workspaceFolder, mounts: [
         { type: 'bind', source: '/home/user/project', destination: '/workspaces/project' },
       ],
-    })));
+    }) + '\n__NPU_MONITOR_WORKSPACE_FILE__' + id), 'project.code-workspace');
     expect(result.snapshot?.containers[0]?.containerWorkspaceFolder).toBe('/workspaces/project/中文 space');
+    expect(result.snapshot?.containers[0]?.containerWorkspaceFile)
+      .toBe('/workspaces/project/中文 space/project.code-workspace');
     expect(parseDevContainerOutput(envelope(JSON.stringify(metadata)))
       .snapshot?.containers[0]?.containerWorkspaceFolder).toBeUndefined();
   });
@@ -101,23 +103,37 @@ describe('Dev Container collection', () => {
   });
 
   it('uses only read-only Docker operations and requests no environment variables', () => {
-    const command = buildDevContainerScanCommand();
+    const command = buildDevContainerScanCommand('project.code-workspace');
     expect(command).toContain('docker ps -a --no-trunc');
     expect(command).toContain('docker inspect --type container');
+    expect(command).toContain('[ -f "$workspace/$workspace_file" ]');
     for (const label of ['devcontainer.local_folder', 'devcontainer.config_file', 'vsch.local.folder']) {
       expect(command).toContain(label);
     }
     expect(command).not.toMatch(/sudo|Config\.Env|docker (?:run|exec|start|stop|rm|pull)|eval /);
+    expect(buildDevContainerScanCommand('../secret.code-workspace')).not.toContain('../secret.code-workspace');
   });
 
   it.skipIf(process.platform === 'win32')('executes the generated POSIX shell command with a Docker stub, including a removal race', () => {
     const dir = mkdtempSync(path.join(os.tmpdir(), 'dev-container-shell-'));
     try {
-      writeFileSync(path.join(dir, 'docker'), `#!/bin/sh\nif [ "$1" = ps ]; then\n printf '%s\\n' '${id}' '${'b'.repeat(64)}'\nelse\n cat <<'DATA'\n${JSON.stringify(metadata)}\nError: No such container: ${'b'.repeat(64)}\nDATA\n exit 1\nfi\n`, { mode: 0o755 });
-      const output = execFileSync('/bin/sh', ['-c', buildDevContainerScanCommand()], {
-        env: { ...process.env, PATH: dir + ':' + process.env.PATH }, encoding: 'utf8',
+      const workspaceFile = '项目 \'quoted\' $(touch PWNED).code-workspace';
+      const shellMetadata = {
+        ...metadata,
+        workspaceFolder: dir,
+        workspaceFile: undefined,
+        mounts: [{ type: 'bind', source: dir, destination: '/workspaces/project' }],
+      };
+      writeFileSync(path.join(dir, workspaceFile), 'workspace contents must not be returned');
+      writeFileSync(path.join(dir, 'docker'), `#!/bin/sh\nif [ "$1" = ps ]; then\n printf '%s\\n' '${id}' '${'b'.repeat(64)}'\nelif [ "\${5#'{{if'}" != "$5" ]; then\n printf '%s\\n' '${dir}'\nelse\n cat <<'DATA'\n${JSON.stringify(shellMetadata)}\nError: No such container: ${'b'.repeat(64)}\nDATA\n exit 1\nfi\n`, { mode: 0o755 });
+      const output = execFileSync('/bin/sh', ['-c', buildDevContainerScanCommand(workspaceFile)], {
+        cwd: dir, env: { ...process.env, PATH: dir + ':' + process.env.PATH }, encoding: 'utf8',
       });
-      expect(parseDevContainerOutput(output).snapshot?.containers).toHaveLength(1);
+      expect(parseDevContainerOutput(output, workspaceFile).snapshot?.containers).toMatchObject([{
+        containerWorkspaceFile: '/workspaces/project/' + workspaceFile,
+      }]);
+      expect(output).not.toContain('workspace contents must not be returned');
+      expect(existsSync(path.join(dir, 'PWNED'))).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

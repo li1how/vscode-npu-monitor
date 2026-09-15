@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { containerWorkspaceFolder } from '../../src/containers/metadata.js';
+import { containerWorkspaceFolder, isValidWorkspaceFileName } from '../../src/containers/metadata.js';
 import { attachedContainerAuthority, openDevContainer, openSshWindow } from '../../src/ui/containerActions.js';
 import { ContainerNode, HostNode } from '../../src/ui/nodes.js';
 import { NpuTreeProvider } from '../../src/ui/treeProvider.js';
 import type { DevContainer, HostRecord } from '../../src/types.js';
-import { availableCommands, commandCalls, commandFailures, errorMessages, resetVscodeMock } from '../mocks/vscode.js';
+import {
+  availableCommands, commandCalls, commandFailures, configurationValues, errorMessages, resetVscodeMock,
+} from '../mocks/vscode.js';
 
 function fixture(): { record: HostRecord; container: DevContainer; node: ContainerNode } {
   const container: DevContainer = {
@@ -37,6 +39,14 @@ describe('container workspace mapping', () => {
     expect(containerWorkspaceFolder('/project', [null, { type: 'bind', source: '/project', destination: 42 }])).toBeUndefined();
     expect(containerWorkspaceFolder('/project', [{ type: 'volume', source: '/project', destination: '/volume' }])).toBeUndefined();
   });
+
+  it.each([
+    ['', true], ['vllm-ascend-dev.code-workspace', true], ['开发 "quoted".code-workspace', true],
+    ['/absolute.code-workspace', false], ['nested/project.code-workspace', false],
+    ['nested\\project.code-workspace', false], ['project.json', false], ['bad\0.code-workspace', false],
+  ])('validates a root-level workspace file name without expansion: %s', (value, valid) => {
+    expect(isValidWorkspaceFileName(value)).toBe(valid);
+  });
 });
 
 describe('open Dev Container in a new window', () => {
@@ -65,9 +75,35 @@ describe('open Dev Container in a new window', () => {
     expect(errorMessages).toEqual([]);
   });
 
+  it('opens the configured workspace file from the mapped container workspace', async () => {
+    const { record, container, node } = fixture();
+    container.containerWorkspaceFile = '/workspaces/project/vllm-ascend-dev.code-workspace';
+    configurationValues.set('npuMonitor.containers.workspaceFile', '  vllm-ascend-dev.code-workspace  ');
+    await openDevContainer(node, async () => record);
+    expect(commandCalls).toEqual([{ command: 'vscode.openFolder', args: [{
+      scheme: 'vscode-remote', authority: attachedContainerAuthority(record.host.alias, container.id),
+      path: container.containerWorkspaceFile,
+    }, { forceNewWindow: true }] }]);
+    expect(errorMessages).toEqual([]);
+  });
+
+  it('reports a missing or invalid configured workspace file without opening a fallback folder', async () => {
+    for (const workspaceFile of ['missing.code-workspace', '/absolute.code-workspace',
+      'nested/project.code-workspace', 'project.json']) {
+      resetVscodeMock();
+      const { record, node } = fixture();
+      configurationValues.set('npuMonitor.containers.workspaceFile', workspaceFile);
+      await openDevContainer(node, async () => record);
+      expect(commandCalls).toEqual([]);
+      expect(errorMessages).toHaveLength(1);
+      expect(errorMessages[0]).toContain(workspaceFile);
+    }
+  });
+
   it('uses an attached empty window when the container workspace path cannot be resolved', async () => {
     const { record, container, node } = fixture();
     container.containerWorkspaceFolder = undefined;
+    configurationValues.set('npuMonitor.containers.workspaceFile', 'vllm-ascend-dev.code-workspace');
     await openDevContainer(node, async () => record);
     expect(commandCalls).toEqual([{ command: 'vscode.newWindow', args: [{
       remoteAuthority: attachedContainerAuthority(record.host.alias, container.id), reuseWindow: false,
@@ -79,6 +115,7 @@ describe('open Dev Container in a new window', () => {
     container.isDevContainer = false;
     container.workspaceFolder = undefined;
     container.containerWorkspaceFolder = undefined;
+    configurationValues.set('npuMonitor.containers.workspaceFile', 'vllm-ascend-dev.code-workspace');
     await openDevContainer(node, async () => record);
     expect(commandCalls).toEqual([{ command: 'vscode.newWindow', args: [{
       remoteAuthority: attachedContainerAuthority(record.host.alias, container.id), reuseWindow: false,

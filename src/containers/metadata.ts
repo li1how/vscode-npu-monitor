@@ -14,6 +14,10 @@ export function devContainerDisplayName(container: DevContainer): string {
   return (folder && path.posix.basename(folder)) || 'Dev Container';
 }
 
+export function isValidWorkspaceFileName(value: string): boolean {
+  return value === '' || (/^[^/\\\0]+\.code-workspace$/.test(value));
+}
+
 export function containerWorkspaceFolder(workspace: string | undefined, mounts: unknown): string | undefined {
   if (!workspace?.startsWith('/') || !Array.isArray(mounts)) {
     return undefined;

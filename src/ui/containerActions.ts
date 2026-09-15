@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
-import { devContainerDisplayName } from '../containers/metadata.js';
+import { devContainerDisplayName, isValidWorkspaceFileName } from '../containers/metadata.js';
+import { getSettings } from '../settings.js';
 import type { HostRecord } from '../types.js';
 import { formatSshTarget } from './hostActions.js';
 import { ContainerNode, type HostNode, type MonitorNode } from './nodes.js';
@@ -125,8 +126,24 @@ export async function openDevContainer(
     }
     const authority = attachedContainerAuthority(alias, id);
     if (container.containerWorkspaceFolder) {
+      const workspaceFileName = getSettings().containerWorkspaceFile;
+      if (!isValidWorkspaceFileName(workspaceFileName)) {
+        throw new Error(vscode.l10n.t(
+          'Invalid workspace file name "{0}". Use a file name ending in .code-workspace without path separators.',
+          workspaceFileName,
+        ));
+      }
+      const target = workspaceFileName
+        ? container.containerWorkspaceFile
+        : container.containerWorkspaceFolder;
+      if (!target) {
+        throw new Error(vscode.l10n.t(
+          'The configured workspace file "{0}" was not found in the workspace folder.',
+          workspaceFileName,
+        ));
+      }
       await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.from({
-        scheme: 'vscode-remote', authority, path: container.containerWorkspaceFolder,
+        scheme: 'vscode-remote', authority, path: target,
       }), { forceNewWindow: true });
     } else {
       await vscode.commands.executeCommand('vscode.newWindow', { remoteAuthority: authority, reuseWindow: false });

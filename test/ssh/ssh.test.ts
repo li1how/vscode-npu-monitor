@@ -33,6 +33,7 @@ const settings: MonitorSettings = {
   devContainersTimeoutSeconds: 5,
   containerFilterMode: 'devContainers',
   containerWorkspacePaths: [],
+  containerWorkspaceFile: '',
   idleConsecutiveChecks: 1,
 };
 
@@ -368,4 +369,3 @@ describe('SSH configuration and scan protocol', () => {
     expect(detectSshExecutablePath('/custom/ssh', environment)).toBe('/custom/ssh');
   });
 });
-

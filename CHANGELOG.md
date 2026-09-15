@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Copy SSH host connection information from the host context menu.
+- Optionally open a configured `.code-workspace` file when attaching to a container.
 
 ## 0.2.0
 

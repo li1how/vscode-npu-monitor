@@ -70,12 +70,21 @@ describe('container view modes and host workspace paths', () => {
   });
 
   it('defaults safely and retains saved paths when modes change', () => {
-    expect(getSettings()).toMatchObject({ containerFilterMode: 'devContainers', containerWorkspacePaths: [] });
+    expect(getSettings()).toMatchObject({
+      containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
+    });
     configurationValues.set('npuMonitor.containers.workspacePaths', ['/home/user']);
     for (const mode of ['all', 'workspacePaths', 'devContainers', 'invalid']) {
       configurationValues.set('npuMonitor.containers.filterMode', mode);
       expect(getSettings().containerWorkspacePaths).toEqual(['/home/user']);
     }
     expect(getSettings().containerFilterMode).toBe('devContainers');
+  });
+
+  it('trims the configured workspace file name and preserves invalid input for open-time validation', () => {
+    configurationValues.set('npuMonitor.containers.workspaceFile', '  project.code-workspace  ');
+    expect(getSettings().containerWorkspaceFile).toBe('project.code-workspace');
+    configurationValues.set('npuMonitor.containers.workspaceFile', 'nested/project.code-workspace');
+    expect(getSettings().containerWorkspaceFile).toBe('nested/project.code-workspace');
   });
 });

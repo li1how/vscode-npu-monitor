@@ -80,6 +80,7 @@ export interface DevContainer {
   startedAt?: string;
   workspaceFolder?: string;
   containerWorkspaceFolder?: string;
+  containerWorkspaceFile?: string;
   configFile?: string;
 }
 
@@ -124,6 +125,7 @@ export interface MonitorSettings {
   devContainersTimeoutSeconds: number;
   containerFilterMode: 'all' | 'devContainers' | 'workspacePaths';
   containerWorkspacePaths: string[];
+  containerWorkspaceFile: string;
 }
 
 export interface ScanResult {

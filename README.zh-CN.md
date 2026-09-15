@@ -103,6 +103,7 @@ git push origin v0.2.0
 | `devContainers.timeoutSeconds` | `5` | 容器查询超时，不含 SSH 连接时间 |
 | `containers.filterMode` | `devContainers` | `all` 全部容器、`devContainers` 或 `workspacePaths` 工作区筛选 |
 | `containers.workspacePaths` | `[]` | 宿主机工作区目录，仅在 `workspacePaths` 模式生效 |
+| `containers.workspaceFile` | 空 | 用于替代容器工作目录打开的 Workspace 文件名 |
 | `pollIntervalSeconds` | `60` | 订阅轮询周期，最小 10 秒 |
 | `idleScope` | `allCards` | 要求全部卡或任一卡空闲 |
 | `idleRequireNoProcesses` | `true` | 空闲时要求没有 NPU 进程 |
@@ -122,6 +123,11 @@ SSH 相关路径支持 `~`、`${env:NAME}` 和 Windows `%NAME%` 环境变量。W
   "npuMonitor.containers.workspacePaths": ["/home/user", "/mnt/work/user"]
 }
 ```
+
+将 `containers.workspaceFile` 设置为 `vllm-ascend-dev.code-workspace` 之类的文件名，
+可从每个已映射容器工作目录的根目录打开该文件；留空时仍打开工作目录。文件名必须以
+`.code-workspace` 结尾且不能包含路径分隔符，不展开变量或通配符。扫描只检查该文件
+是否为普通文件，不读取文件内容；配置的文件不存在时，打开操作会明确报错。
 
 ## 安全行为
 

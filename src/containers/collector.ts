@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import type * as vscode from 'vscode';
 
 import { SshExecutionError } from '../ssh/runner.js';
@@ -5,11 +7,12 @@ import type { SshRunner } from '../ssh/runner.js';
 import type {
   DevContainer, DevContainerScanResult, DevContainerState, MonitorSettings, SshHost,
 } from '../types.js';
-import { containerWorkspaceFolder, devContainerDisplayName } from './metadata.js';
+import { containerWorkspaceFolder, devContainerDisplayName, isValidWorkspaceFileName } from './metadata.js';
 
 const STATUS = '__NPU_MONITOR_DOCKER_STATUS__';
 const BEGIN = '__NPU_MONITOR_DOCKER_BEGIN__';
 const END = '__NPU_MONITOR_DOCKER_END__';
+const WORKSPACE_FILE = '__NPU_MONITOR_WORKSPACE_FILE__';
 
 // Only selected fields leave the host; never serialize Config.Env or all labels.
 const INSPECT_FORMAT = '{"id":{{json .Id}},"name":{{json .Name}},' +
@@ -21,6 +24,9 @@ const INSPECT_FORMAT = '{"id":{{json .Id}},"name":{{json .Name}},' +
   '"mounts":[{{range $i,$m := .Mounts}}{{if $i}},{{end}}' +
   '{"type":{{json $m.Type}},"source":{{json $m.Source}},"destination":{{json $m.Destination}}}{{end}}]}';
 const LIST_FORMAT = '{{.ID}}';
+const WORKSPACE_FORMAT = '{{if index .Config.Labels "devcontainer.local_folder"}}' +
+  '{{index .Config.Labels "devcontainer.local_folder"}}{{else}}' +
+  '{{index .Config.Labels "vsch.local.folder"}}{{end}}';
 
 // Runs on the SSH host. Read only the labeled configuration, and send only its
 // top-level name back; comments and trailing commas are accepted without eval.
@@ -80,10 +86,16 @@ for line in sys.stdin:
         sys.stdout.write(line)
 `.trim();
 
-export function buildDevContainerScanCommand(): string {
+function shellSingleQuote(value: string): string {
+  return "'" + value.replace(/'/g, "'\\''") + "'";
+}
+
+export function buildDevContainerScanCommand(workspaceFileName = ''): string {
   const nameResolver = "'" + RESOLVE_DEV_CONTAINER_NAMES.replace(/'/g, "'\\''") + "'";
+  const workspaceFile = shellSingleQuote(isValidWorkspaceFileName(workspaceFileName) ? workspaceFileName : '');
   return [
     'export LC_ALL=C',
+    `workspace_file=${workspaceFile}`,
     'if ! command -v docker >/dev/null 2>&1; then',
     `  printf '${STATUS}missingDocker\\n${BEGIN}\\n${END}\\n'`,
     '  exit 0',
@@ -114,6 +126,14 @@ export function buildDevContainerScanCommand(): string {
     '    if [ "$?" -eq 0 ]; then inspection="$named"; fi',
     '  fi',
     '  printf \'%s\\n\' "$inspection"',
+    '  if [ -n "$workspace_file" ]; then',
+    '    for id in "$@"; do',
+    `      workspace="$(docker inspect --type container --format '${WORKSPACE_FORMAT}' "$id" 2>/dev/null)" || continue`,
+    `      if [ -n "$workspace" ] && [ -f "$workspace/$workspace_file" ]; then`,
+    `        printf '${WORKSPACE_FILE}%s\\n' "$id"`,
+    '      fi',
+    '    done',
+    '  fi',
     'else',
     '  inspect_status=0',
     'fi',
@@ -136,7 +156,7 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
-export function parseDevContainerOutput(stdout: string): DevContainerScanResult {
+export function parseDevContainerOutput(stdout: string, workspaceFileName = ''): DevContainerScanResult {
   const lines = stdout.split(/\r?\n/);
   const status = lines.find(line => line.startsWith(STATUS))?.slice(STATUS.length);
   const begin = lines.indexOf(BEGIN);
@@ -145,6 +165,14 @@ export function parseDevContainerOutput(stdout: string): DevContainerScanResult 
     throw new Error('Incomplete Dev Container scan output.');
   }
   const data = lines.slice(begin + 1, end).filter(line => line.trim());
+  const workspaceFileContainers = new Set<string>();
+  for (const line of data.filter(value => value.startsWith(WORKSPACE_FILE))) {
+    const id = line.slice(WORKSPACE_FILE.length);
+    if (!/^[a-f0-9]{64}$/.test(id)) {
+      throw new Error('Invalid workspace file scan output.');
+    }
+    workspaceFileContainers.add(id);
+  }
   if (status === 'missingDocker') {
     return { state: 'missingDocker' };
   }
@@ -160,6 +188,9 @@ export function parseDevContainerOutput(stdout: string): DevContainerScanResult 
   const errors: string[] = [];
   let removed = false;
   for (const line of data) {
+    if (line.startsWith(WORKSPACE_FILE)) {
+      continue;
+    }
     // A container may disappear between list and inspect. Other errors remain errors.
     if (/^(?:Error:|Error response from daemon:) No such (?:object|container): [a-f0-9]{64}$/.test(line)) {
       removed = true;
@@ -176,6 +207,7 @@ export function parseDevContainerOutput(stdout: string): DevContainerScanResult 
     }
     const workspaceFolder = optionalString(value.workspaceFolder) ?? optionalString(value.legacyFolder);
     const configFile = optionalString(value.configFile);
+    const mappedWorkspace = containerWorkspaceFolder(workspaceFolder, value.mounts);
     containers.set(value.id, {
       id: value.id,
       isDevContainer: Boolean(workspaceFolder || configFile),
@@ -187,7 +219,10 @@ export function parseDevContainerOutput(stdout: string): DevContainerScanResult 
       startedAt: typeof value.startedAt === 'string' && !value.startedAt.startsWith('0001-')
         ? optionalString(value.startedAt) : undefined,
       workspaceFolder,
-      containerWorkspaceFolder: containerWorkspaceFolder(workspaceFolder, value.mounts),
+      containerWorkspaceFolder: mappedWorkspace,
+      containerWorkspaceFile: mappedWorkspace && workspaceFileName &&
+        isValidWorkspaceFileName(workspaceFileName) && workspaceFileContainers.has(value.id)
+        ? path.posix.join(mappedWorkspace, workspaceFileName) : undefined,
       configFile,
     });
   }
@@ -212,9 +247,9 @@ export class DevContainerCollector {
   public async scan(host: SshHost, token?: vscode.CancellationToken): Promise<DevContainerScanResult> {
     const startedAt = Date.now();
     try {
-      const result = await this.runner.run(host, buildDevContainerScanCommand(),
+      const result = await this.runner.run(host, buildDevContainerScanCommand(this.settings.containerWorkspaceFile),
         (this.settings.connectTimeoutSeconds + this.settings.devContainersTimeoutSeconds) * 1000, token);
-      const parsed = parseDevContainerOutput(result.stdout);
+      const parsed = parseDevContainerOutput(result.stdout, this.settings.containerWorkspaceFile);
       if (parsed.snapshot) {
         parsed.snapshot.durationMs = Date.now() - startedAt;
       }

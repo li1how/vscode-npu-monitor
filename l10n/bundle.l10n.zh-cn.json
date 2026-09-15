@@ -57,6 +57,8 @@
   "Unable to verify the container state. Refresh the host and try again.": "无法确认容器状态，请刷新主机后重试。",
   "The container no longer exists.": "容器已不存在。",
   "The container is not running. Start it before opening a window.": "容器未运行，请先启动容器再打开窗口。",
+  "Invalid workspace file name \"{0}\". Use a file name ending in .code-workspace without path separators.": "Workspace 文件名“{0}”无效。请填写不含路径分隔符且以 .code-workspace 结尾的文件名。",
+  "The configured workspace file \"{0}\" was not found in the workspace folder.": "工作目录中未找到已配置的 Workspace 文件“{0}”。",
   "Unable to open {0} on {1}: {2}": "无法打开 {1} 上的 {0}：{2}",
   "Container workspace folder: {0}": "容器内工作目录：{0}",
   "Unable to open SSH window for {0}: {1}": "无法为 {0} 打开 SSH 窗口：{1}",

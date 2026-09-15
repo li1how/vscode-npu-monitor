@@ -371,6 +371,13 @@
           "default": [],
           "scope": "window",
           "description": "%configuration.containers.workspacePaths%"
+        },
+        "npuMonitor.containers.workspaceFile": {
+          "type": "string",
+          "default": "",
+          "pattern": "^\\s*(?:[^/\\\\\\u0000]+\\.code-workspace)?\\s*$",
+          "scope": "window",
+          "description": "%configuration.containers.workspaceFile%"
         }
       }
     }
