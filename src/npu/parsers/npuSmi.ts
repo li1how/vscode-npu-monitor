@@ -81,8 +81,12 @@ function parseA5Devices(lines: string[], processHeaderIndex: number): NpuDevice[
   return devices;
 }
 
-function parseA3Devices(lines: string[], processHeaderIndex: number): NpuDevice[] {
+function parseA3Devices(lines: string[], processHeaderIndex: number): {
+  devices: NpuDevice[];
+  deviceIdsByCoordinate: Map<string, string>;
+} {
   const devices: NpuDevice[] = [];
+  const deviceIdsByCoordinate = new Map<string, string>();
   let pending: PendingDevice | undefined;
   for (const line of lines.slice(0, processHeaderIndex)) {
     const cells = tableCells(line);
@@ -105,23 +109,26 @@ function parseA3Devices(lines: string[], processHeaderIndex: number): NpuDevice[
     const chipMatch = /^(\d+)\s+(\d+)$/.exec(first);
     if (pending && chipMatch) {
       const metrics = parseTrailingMetrics(cells[2] ?? '');
+      const physicalId = chipMatch[2] ?? pending.id;
       devices.push({
         ...pending,
-        id: chipMatch[2] ?? pending.id,
+        id: physicalId,
         busId: cells[1] || undefined,
         ...metrics,
         processes: [],
       });
+      deviceIdsByCoordinate.set(pending.id + ':' + (chipMatch[1] ?? ''), physicalId);
       pending = undefined;
     }
   }
-  return devices;
+  return { devices, deviceIdsByCoordinate };
 }
 
 function attachProcesses(
   lines: string[],
   processHeaderIndex: number,
   devices: NpuDevice[],
+  deviceIdsByCoordinate?: Map<string, string>,
 ): void {
   const byId = new Map(devices.map(device => [device.id, device]));
   for (const line of lines.slice(processHeaderIndex + 1)) {
@@ -133,7 +140,8 @@ function attachProcesses(
       continue;
     }
     const idParts = (cells[0] ?? '').split(/\s+/);
-    const id = idParts.at(-1) ?? '';
+    const coordinate = idParts.length === 2 ? idParts.join(':') : undefined;
+    const id = (coordinate && deviceIdsByCoordinate?.get(coordinate)) ?? idParts.at(-1) ?? '';
     const pid = cells[1] ?? '';
     if (!/^\d+$/.test(pid)) {
       continue;
@@ -155,14 +163,13 @@ export function parseNpuSmiInfo(text: string): {
   const processHeaderIndex = lines.findIndex(line => /Process id/.test(line));
   const tableEnd = processHeaderIndex >= 0 ? processHeaderIndex : lines.length;
   const isA5 = lines.some(line => /\|\s*NPU ID\s*\|\s*Name/.test(line));
-  const devices = isA5
-    ? parseA5Devices(lines, tableEnd)
-    : parseA3Devices(lines, tableEnd);
+  const a3Result = isA5 ? undefined : parseA3Devices(lines, tableEnd);
+  const devices = isA5 ? parseA5Devices(lines, tableEnd) : a3Result?.devices ?? [];
   if (devices.length === 0) {
     throw new Error('Unable to parse devices from npu-smi info.');
   }
   if (processHeaderIndex >= 0) {
-    attachProcesses(lines, processHeaderIndex, devices);
+    attachProcesses(lines, processHeaderIndex, devices, a3Result?.deviceIdsByCoordinate);
   }
   for (const device of devices) {
     device.processCount = device.processes.length;

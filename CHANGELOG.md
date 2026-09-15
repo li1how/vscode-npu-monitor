@@ -4,6 +4,7 @@
 
 - Copy SSH host connection information from the host context menu.
 - Optionally open a configured `.code-workspace` file when attaching to a container.
+- Correct A3 process attribution when each logical NPU contains multiple physical chips.
 
 ## 0.2.0
 

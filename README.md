@@ -12,7 +12,7 @@ interfaces that follow the VS Code language setting.
 - Scan all hosts, one host, or multiple selected hosts manually.
 - Subscribe to idle notifications and poll only subscribed hosts automatically.
 - Prefer NPU-Exporter `/metrics` and quickly fall back to `npu-smi info`.
-- Display health, utilization, HBM, temperature, power, and NPU processes.
+- Display health, utilization, HBM, temperature, power, and processes per physical NPU.
 - Monitor Docker containers with Dev Container and workspace directory filters.
 - Copy SSH host connection information from the host context menu.
 - Open running containers in a new window and copy container information.

@@ -58,6 +58,38 @@ describe('NPU status parsers', () => {
     });
   });
 
+  it('maps A3 processes from NPU and chip coordinates to physical device ids', () => {
+    const text = [
+      '| NPU   Name                | Health        | Power(W) Temp(C) Hugepages-Usage(page) |',
+      '| Chip  Phy-ID              | Bus-Id        | AICore(%) Memory-Usage(MB) HBM-Usage(MB) |',
+      '| 0     Ascend910           | OK            | 100 40 0 / 0 |',
+      '| 0     0                   | 0000:01:00.0  | 0 0 / 0 10 / 20 |',
+      '| 0     Ascend910           | OK            | - 41 0 / 0 |',
+      '| 1     1                   | 0000:02:00.0  | 0 0 / 0 10 / 20 |',
+      '| 1     Ascend910           | OK            | 100 42 0 / 0 |',
+      '| 0     2                   | 0000:03:00.0  | 0 0 / 0 10 / 20 |',
+      '| 1     Ascend910           | OK            | - 43 0 / 0 |',
+      '| 1     3                   | 0000:04:00.0  | 0 0 / 0 10 / 20 |',
+      '| NPU     Chip              | Process id    | Process name | Process memory(MB) |',
+      '| 0       0                 | 100           | worker-0     | 11                 |',
+      '| 0       1                 | 101           | worker-1     | 12                 |',
+      '| 1       0                 | 102           | worker-2     | 13                 |',
+      '| 1       1                 | 103           | worker-3     | 14                 |',
+    ].join('\n');
+
+    const result = parseNpuSmiInfo(text);
+
+    expect(result.devices.map(device => ({
+      id: device.id,
+      processIds: device.processes.map(process => process.pid),
+    }))).toEqual([
+      { id: '0', processIds: ['100'] },
+      { id: '1', processIds: ['101'] },
+      { id: '2', processIds: ['102'] },
+      { id: '3', processIds: ['103'] },
+    ]);
+  });
+
   it('throws on unrecognizable npu-smi text', () => {
     expect(() => parseNpuSmiInfo('hello world')).toThrow(
       'Unable to parse devices',
