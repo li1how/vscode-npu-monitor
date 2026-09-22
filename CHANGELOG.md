@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+## 0.2.2
+
+- Expose cached monitoring and explicit refresh through authenticated MCP, with panel status and environment-variable copy for Codex and Claude Code.
+
 ## 0.2.1
 
 - Copy SSH host connection information from the host context menu.

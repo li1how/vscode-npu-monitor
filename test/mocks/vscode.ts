@@ -99,6 +99,10 @@ export const createdTerminals: Array<{
 export const terminalFailures: unknown[] = [];
 
 export const window = {
+  quickPickAction: '',
+  async showQuickPick(items: Array<{ label: string; action: string }>) {
+    return items.find(item => item.action === window.quickPickAction);
+  },
   createTerminal(options: unknown): { show: () => void } {
     if (terminalFailures.length > 0) {
       throw terminalFailures.shift();
@@ -161,6 +165,7 @@ export const Uri = {
 };
 
 export function resetVscodeMock(): void {
+  window.quickPickAction = '';
   clipboardWrites.length = 0;
   clipboardFailures.length = 0;
   informationMessages.length = 0;

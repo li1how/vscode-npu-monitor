@@ -41,5 +41,8 @@
   "configuration.containers.filterMode.workspacePaths": "Dev Containers whose host workspace matches any saved directory. An empty list shows all Dev Containers.",
   "configuration.containers.workspacePaths": "Host workspace directories for workspacePaths mode only. Match any absolute Linux directory or its descendants, case-sensitively. Empty means all Dev Containers. Invalid entries do not match. Paths, variables and wildcards are not expanded.",
   "configuration.containers.workspaceFile": "Workspace file name to open inside a mapped container workspace. Leave empty to open the workspace folder. Use a file name ending in .code-workspace without path separators; variables and wildcards are not expanded.",
-  "command.copyContainerSummary": "Copy Summary"
+  "command.copyContainerSummary": "Copy Summary",
+  "command.mcpMenu": "Manage MCP service",
+  "configuration.mcp.enabled": "Enable the local MCP service for this workspace.",
+  "configuration.mcp.port": "Local MCP port. Restart clients after changing it."
 }

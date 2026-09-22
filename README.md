@@ -40,7 +40,7 @@ subscription list.
 npm install
 npm run check
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.2.0.vsix
+code --install-extension release/vscode-npu-monitor-0.2.2.vsix
 ```
 
 The same VSIX can be installed in either a local Windows Extension Host or a
@@ -64,16 +64,16 @@ To prepare a new version, update `package.json`, `package-lock.json`, and
 `CHANGELOG.md`:
 
 ```bash
-npm version 0.2.0 --no-git-tag-version
+npm version 0.2.2 --no-git-tag-version
 git add package.json package-lock.json CHANGELOG.md
-git commit -m "[Release] Prepare v0.2.0"
+git commit -m "[Release] Prepare v0.2.2"
 git push origin main
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -a v0.2.2 -m "v0.2.2"
+git push origin v0.2.2
 ```
 
 The release asset name is generated from the package version, for example
-`release/vscode-npu-monitor-0.2.0.vsix`. GitHub also provides source code
+`release/vscode-npu-monitor-0.2.2.vsix`. GitHub also provides source code
 archives in zip and tar.gz formats.
 
 ## Usage
@@ -101,12 +101,26 @@ scans retain the last successful data with a **Stale** marker.
 Remote - SSH must use the same SSH configuration and host aliases as NPU Monitor
 when opening a container.
 
+### MCP access
+
+Enable MCP from the status row at the top of NPU Monitor. Codex and Claude Code can
+read cached hosts and containers, or explicitly refresh selected hosts. The service
+uses an authenticated loopback endpoint (default port `49160`) and stops with the window.
+Only one window can listen on a given port; clients should run in the same environment.
+
+Choose **Copy MCP environment variables** to obtain the endpoint and token. Configure
+your client to use Streamable HTTP with the URL from `NPU_MONITOR_MCP_URL` and an
+`Authorization: Bearer <token>` header using `NPU_MONITOR_MCP_TOKEN`. The copied values
+contain credentials. Cached idle status is not a resource reservation.
+
 ## Configuration
 
 Search for `NPU Monitor` in VS Code settings:
 
 | Setting | Default | Description |
 | --- | --- | --- |
+| `mcp.enabled` | `false` | Enable MCP in this workspace |
+| `mcp.port` | `49160` | Loopback MCP port |
 | `sshConfigPath` | Remote - SSH config or auto-detected | Explicit NPU Monitor paths have highest priority; when empty, `remote.SSH.configFile` is used before Windows / WSL auto-detection |
 | `knownHostsPath` | Next to SSH config | Host key file |
 | `sshExecutablePath` | Auto-detected | Windows OpenSSH or `/usr/bin/ssh` |
@@ -174,11 +188,13 @@ src/
   settings.ts        # Settings
   types.ts           # Shared data types
   monitorService.ts  # Subscriptions, scheduling, and cached state
+  mcp/               # MCP server, cached tools and lifecycle
   ssh/               # SSH configuration and execution
   npu/               # NPU collection, parsing, and idle detection
   containers/        # Container collection, metadata, and filtering
   ui/                # Tree view and actions
 test/                # Automated tests
+  mcp/
   ssh/
   npu/
   containers/

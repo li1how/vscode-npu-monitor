@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { McpController } from './mcp/controller.js';
 import { MonitorService, type ScanProgress } from './monitorService.js';
 import { getSettings } from './settings.js';
 import { currentSshEnvironment, detectSshExecutablePath } from './ssh/config.js';
@@ -78,7 +79,8 @@ export function openSshTerminal(node?: HostNode): void {
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('NPU Monitor', { log: true });
   const service = new MonitorService(context, output);
-  const provider = new NpuTreeProvider(service);
+  const mcp = new McpController(context, service, output);
+  const provider = new NpuTreeProvider(service, mcp);
   const treeView = vscode.window.createTreeView('npuMonitor.hosts', {
     treeDataProvider: provider,
     canSelectMany: true,
@@ -93,6 +95,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   };
   context.subscriptions.push(
     output,
+    mcp,
+    mcp.onDidChange(() => provider.refresh()),
+    vscode.commands.registerCommand('npuMonitor.mcpMenu', () => mcp.showMenu()),
     service,
     provider,
     treeView,
@@ -181,6 +186,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
     vscode.commands.registerCommand('npuMonitor.showOutput', () => output.show()),
     vscode.workspace.onDidChangeConfiguration(async event => {
+      if (event.affectsConfiguration('npuMonitor.mcp')) {
+        await mcp.configure();
+      }
       if (event.affectsConfiguration('npuMonitor') ||
         event.affectsConfiguration('remote.SSH.configFile')) {
         await service.reloadConfig(false);
@@ -190,6 +198,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   );
 
   await service.initialize();
+  await mcp.configure();
   updateBadge();
 }
 

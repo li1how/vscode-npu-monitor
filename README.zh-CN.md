@@ -36,7 +36,7 @@
 npm install
 npm run check
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.2.0.vsix
+code --install-extension release/vscode-npu-monitor-0.2.2.vsix
 ```
 
 同一个 VSIX 可以安装到 Windows 本地 Extension Host 或 WSL Extension Host。
@@ -57,16 +57,16 @@ code .
 准备新版本时更新 `package.json`、`package-lock.json` 和 `CHANGELOG.md`：
 
 ```bash
-npm version 0.2.0 --no-git-tag-version
+npm version 0.2.2 --no-git-tag-version
 git add package.json package-lock.json CHANGELOG.md
-git commit -m "[Release] Prepare v0.2.0"
+git commit -m "[Release] Prepare v0.2.2"
 git push origin main
-git tag -a v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -a v0.2.2 -m "v0.2.2"
+git push origin v0.2.2
 ```
 
 发布附件名根据版本自动生成，例如
-`release/vscode-npu-monitor-0.2.0.vsix`。GitHub 同时提供源码 zip 和 tar.gz。
+`release/vscode-npu-monitor-0.2.2.vsix`。GitHub 同时提供源码 zip 和 tar.gz。
 
 ## 使用
 
@@ -85,12 +85,24 @@ git push origin v0.2.0
 
 打开容器时，Remote - SSH 需使用与 NPU Monitor 一致的 SSH 配置和主机别名。
 
+### MCP 接入
+
+点击面板顶部的 MCP 状态行启用服务。Codex、Claude Code 可读取缓存的主机和容器信息，
+或显式刷新指定节点。服务使用带鉴权的回环地址（默认端口 `49160`），随窗口关闭而停止；
+同一端口只允许一个窗口监听，客户端应运行在相同环境中。
+
+选择“复制 MCP 环境变量”获取地址和 token。在客户端中选择 Streamable HTTP，
+使用 `NPU_MONITOR_MCP_URL` 作为地址，将 `NPU_MONITOR_MCP_TOKEN` 配置为
+`Authorization: Bearer <token>` 请求头。复制内容含凭据；缓存中的空闲状态不代表设备已被预约。
+
 ## 配置
 
 在 VS Code 设置中搜索 `NPU Monitor`：
 
 | 设置 | 默认值 | 说明 |
 | --- | --- | --- |
+| `mcp.enabled` | `false` | 启用当前工作区 MCP 服务 |
+| `mcp.port` | `49160` | MCP 回环监听端口 |
 | `sshConfigPath` | Remote - SSH 配置或自动检测 | 显式配置的 NPU Monitor 路径优先级最高；留空时先使用 `remote.SSH.configFile`，再按 Windows / WSL 规则自动检测 |
 | `knownHostsPath` | SSH config 同目录 | 主机密钥文件 |
 | `sshExecutablePath` | 自动检测 | Windows OpenSSH 或 `/usr/bin/ssh` |
@@ -151,6 +163,7 @@ src/
   settings.ts        # 配置读取
   types.ts           # 共享数据类型
   monitorService.ts  # 订阅、扫描调度和缓存
+  mcp/               # MCP 服务、缓存查询和生命周期
   ssh/               # SSH 配置与执行
   npu/               # NPU 采集、解析和空闲判断
   containers/        # 容器采集、元数据和筛选

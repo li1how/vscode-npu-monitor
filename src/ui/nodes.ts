@@ -27,4 +27,8 @@ export class StatusNode {
   public constructor(public readonly text: string) {}
 }
 
-export type MonitorNode = HostNode | DeviceNode | GroupNode | ContainerNode | StatusNode;
+export class McpNode {
+  public constructor(public readonly state: string, public readonly tooltip: string) {}
+}
+
+export type MonitorNode = McpNode | HostNode | DeviceNode | GroupNode | ContainerNode | StatusNode;

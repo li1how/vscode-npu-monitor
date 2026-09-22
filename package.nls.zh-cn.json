@@ -41,5 +41,8 @@
   "configuration.containers.filterMode.workspacePaths": "宿主机工作区匹配任一指定目录的 Dev Container；空列表显示全部 Dev Container。",
   "configuration.containers.workspacePaths": "仅在 workspacePaths 模式生效的宿主机工作区目录。填写 Linux 绝对路径，区分大小写，匹配任一目录及其子目录；空列表显示全部 Dev Container。无效条目不匹配，不展开路径、变量或通配符。",
   "configuration.containers.workspaceFile": "在已映射的容器工作目录内打开的 Workspace 文件名。留空时打开工作目录。仅填写不含路径分隔符且以 .code-workspace 结尾的文件名，不展开变量或通配符。",
-  "command.copyContainerSummary": "复制精简信息"
+  "command.copyContainerSummary": "复制精简信息",
+  "command.mcpMenu": "管理 MCP 服务",
+  "configuration.mcp.enabled": "为当前工作区启用本地 MCP 服务。",
+  "configuration.mcp.port": "本地 MCP 端口，修改后需更新客户端配置。"
 }

@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 
 import { filterContainers, invalidWorkspacePathCount } from '../containers/filter.js';
 import { devContainerDisplayName } from '../containers/metadata.js';
+import type { McpController } from '../mcp/controller.js';
 import { isDeviceIdle } from '../npu/idle.js';
 import type { MonitorService } from '../monitorService.js';
 import { getSettings } from '../settings.js';
 import type { DevContainer, DevContainerState, HostRecord, HostState, NpuDevice } from '../types.js';
-import { ContainerNode, DeviceNode, GroupNode, HostNode, StatusNode, type MonitorNode } from './nodes.js';
+import { McpNode, ContainerNode, DeviceNode, GroupNode, HostNode, StatusNode, type MonitorNode } from './nodes.js';
 
 function visibleContainers(record: HostRecord): DevContainer[] {
   return filterContainers(record.devContainers?.snapshot?.containers ?? [], getSettings());
@@ -87,13 +88,16 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
 
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  public constructor(private readonly service: MonitorService) {
+  public constructor(private readonly service: MonitorService, private readonly mcp?: McpController) {
     this.serviceSubscription = service.onDidChange(() => this.changeEmitter.fire(undefined));
   }
 
+  public refresh(): void { this.changeEmitter.fire(undefined); }
+
   public getChildren(element?: MonitorNode): MonitorNode[] {
     if (!element) {
-      return this.service.getRecords().map(record => new HostNode(record));
+      return [...(this.mcp ? [new McpNode(this.mcp.state, this.mcp.tooltip)] : []),
+        ...this.service.getRecords().map(record => new HostNode(record))];
     }
     if (element instanceof HostNode) {
       if (getSettings().devContainersEnabled) {
@@ -141,6 +145,16 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
   }
 
   public getTreeItem(element: MonitorNode): vscode.TreeItem {
+    if (element instanceof McpNode) {
+      const item = new vscode.TreeItem('MCP');
+      item.id = 'npu-monitor:mcp';
+      item.contextValue = 'npuMonitorMcp';
+      item.description = element.state;
+      item.tooltip = element.tooltip;
+      item.iconPath = new vscode.ThemeIcon('plug');
+      item.command = { command: 'npuMonitor.mcpMenu', title: 'MCP' };
+      return item;
+    }
     if (element instanceof GroupNode) {
       return this.groupTreeItem(element);
     }
