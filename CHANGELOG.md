@@ -3,6 +3,7 @@
 ## Unreleased
 
 - Scan NPU and containers on startup, then refresh NPU status every 180 seconds by default. Show per-NPU idle history and ranked candidates in the UI and MCP with separate data freshness.
+- Simplify host summaries and action placement, show the newest idle-history days first, and raise the per-window scan concurrency default from 6 to 8.
 
 ## 0.2.2
 

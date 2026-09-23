@@ -20,7 +20,7 @@
   "configuration.connectTimeoutSeconds": "SSH 连接超时时间，单位为秒。",
   "configuration.exporterProbeTimeoutSeconds": "探测 NPU-Exporter 指标的总超时时间。",
   "configuration.npuSmiTimeoutSeconds": "npu-smi info 超时时间。",
-  "configuration.maxConcurrentHosts": "同时扫描的最大机器数。",
+  "configuration.maxConcurrentHosts": "此 VS Code 窗口同时扫描的最大机器数。",
   "configuration.excludedHosts": "不参与监控的 SSH Host 别名。",
   "configuration.pollIntervalSeconds": "NPU 自动轮询周期。",
   "configuration.idleScope": "要求全部卡空闲或任一卡空闲。",

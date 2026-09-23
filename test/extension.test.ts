@@ -47,11 +47,15 @@ describe('view action placement', () => {
       items.find(item => item.command === command)?.group;
     expect(group(title, 'npuMonitor.scanAll')).toBe('navigation@1');
     expect(group(title, 'npuMonitor.chooseIdleHost')).toBe('navigation@2');
-    expect(group(title, 'npuMonitor.reloadConfig')).toBe('navigation@3');
+    expect(group(title, 'npuMonitor.reloadConfig')).toBe('2_actions@3');
+    expect(group(title, 'npuMonitor.selectSshConfig')).toBe('2_actions@2');
     expect(group(title, 'npuMonitor.openSettings')).not.toMatch(/^navigation/);
     expect(group(host, 'npuMonitor.subscribeHost')).toBe('inline@2');
     expect(group(host, 'npuMonitor.showIdleHistory')).toBe('inline@3');
-    expect(group(host, 'npuMonitor.openSshTerminal')).toBe('inline@4');
+    expect(group(host, 'npuMonitor.scanHost')).toBe('inline@1');
+    expect(group(host, 'npuMonitor.unsubscribeHost')).toBe('inline@2');
+    expect(group(host, 'npuMonitor.openSshTerminal')).toBe('2_open@2');
+    expect(group(host, 'npuMonitor.openSshWindow')).toBe('2_open@1');
   });
 });
 

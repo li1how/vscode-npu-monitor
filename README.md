@@ -83,17 +83,20 @@ archives in zip and tar.gz formats.
 1. Open **NPU Monitor** in the Activity Bar.
 2. On first use, the extension loads the SSH configuration and scans all hosts
    for NPU and container status.
-3. Select the refresh icon in the view title to scan all hosts.
+3. Select the refresh icon in the view title to scan all hosts. Reload the SSH
+   configuration from the title bar’s More Actions menu.
 4. Use the refresh icon on a host to scan it, or select multiple hosts and run
    **Scan Selected Hosts**.
-5. Use the terminal icon on a host to open an SSH terminal. Right-click a host
-   to copy its connection information; multiple selected hosts are supported.
+5. Right-click a host to open an SSH terminal or copy its connection information;
+   copying supports multiple selected hosts.
 6. Select the bell icon to subscribe to a host. It is scanned immediately; periodic
    NPU scans can send idle notifications.
 7. Use the view-title **Choose Idle Host** button to rank fresh candidates by the longest
    observed continuous idle time. Selecting one reveals and expands its tree row. Use
-   the history icon beside each host's bell to view its per-NPU timeline.
-8. Expand a host to view NPU and container status. Use a running container's
+   the history icon beside each host's bell to view its per-NPU timeline, with the newest day first.
+8. Host rows show idle NPU count, longest observed idle time, collection time and
+   container count. Hover for full status and collection source. Expand a host to view
+   NPU and container status. Use a running container's
    new-window icon to attach in a separate VS Code window.
 9. Use a container's copy icon for **Copy Summary**, or the context menu for
    **Copy Full Information**. Both support multiple selected containers.
@@ -139,7 +142,7 @@ Search for `NPU Monitor` in VS Code settings:
 | `connectTimeoutSeconds` | `8` | SSH connection timeout |
 | `exporterProbeTimeoutSeconds` | `2` | Total Exporter probe timeout |
 | `npuSmiTimeoutSeconds` | `10` | `npu-smi info` timeout |
-| `maxConcurrentHosts` | `6` | Maximum concurrent manual or automatic scans |
+| `maxConcurrentHosts` | `8` | Maximum hosts scanned concurrently per VS Code window |
 | `excludedHosts` | `[]` | Host aliases that are hidden and never scanned |
 | `devContainers.enabled` | `true` | Enable container monitoring |
 | `devContainers.timeoutSeconds` | `5` | Container query timeout, excluding SSH connection time |

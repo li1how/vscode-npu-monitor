@@ -260,28 +260,31 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
     );
     const source = record.snapshot?.source === 'exporter' ? 'Exporter' : 'npu-smi';
     const state = record.refreshing ? stateText('refreshing') : stateText(record.state);
-    item.description = record.snapshot
-      ? state + ' · ' + record.snapshot.devices.length + ' NPU · ' + source
-      : state;
+    const now = Date.now();
+    const fresh = record.snapshot && !record.stale && now >= record.snapshot.collectedAt &&
+      now - record.snapshot.collectedAt <= getSettings().pollIntervalSeconds * 2000;
+    const outdated = record.stale || Boolean(record.snapshot && !fresh);
+    const description: string[] = [];
+    if (record.refreshing || outdated || (record.state !== 'idle' && record.state !== 'busy')) {
+      description.push(state);
+    }
+    if (outdated) description.push(vscode.l10n.t('Stale'));
     if (record.snapshot) {
-      const now = Date.now();
-      const fresh = !record.stale && now >= record.snapshot.collectedAt && now - record.snapshot.collectedAt <=
-        getSettings().pollIntervalSeconds * 2000;
       const history = this.service.getIdleHistory(record.host.alias, now);
       const ids = new Set(record.snapshot.devices.map(device => device.id));
       const idleCards = fresh ? history.cards.filter(card => ids.has(card.id) && card.idleSince !== null) : [];
-      item.description += ' · ' + vscode.l10n.t('{0}/{1} idle NPUs',
-        idleCards.length, record.snapshot.devices.length);
+      description.push(vscode.l10n.t('{0}/{1} idle NPUs', idleCards.length, record.snapshot.devices.length));
       if (idleCards.length) {
         const longest = Math.min(...idleCards.map(card => card.idleSince!));
-        item.description += ' · ' + vscode.l10n.t('Longest idle: {0}', formatDuration(now - longest));
+        description.push(vscode.l10n.t('Longest idle: {0}', formatDuration(now - longest)));
       }
-      item.description += ' · ' + new Date(record.snapshot.collectedAt).toLocaleTimeString();
+      description.push(new Date(record.snapshot.collectedAt).toLocaleTimeString());
     }
     if (getSettings().devContainersEnabled && record.devContainers?.snapshot) {
-      item.description += ' · ' + visibleContainers(record).length + ' ' + containerGroupLabel() +
-        (record.devContainers.stale ? ' · ' + vscode.l10n.t('Stale') : '');
+      description.push(visibleContainers(record).length + ' ' + containerGroupLabel() +
+        (record.devContainers.stale ? ' · ' + vscode.l10n.t('Stale') : ''));
     }
+    item.description = description.join(' · ');
     item.iconPath = stateIcon(record);
     item.contextValue = record.subscribed ? 'npuHostSubscribed' : 'npuHostUnsubscribed';
     item.id = 'host:' + record.host.alias;
@@ -297,6 +300,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
       record.subscribed ? vscode.l10n.t('Yes') : vscode.l10n.t('No'),
     ));
     if (record.snapshot) {
+      tooltip.appendMarkdown('  \n' + vscode.l10n.t('Source: {0}', source));
       tooltip.appendMarkdown('  \n' + vscode.l10n.t(
         'Updated: {0}',
         new Date(record.snapshot.collectedAt).toLocaleString(),

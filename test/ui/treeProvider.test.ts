@@ -130,7 +130,7 @@ describe('NpuTreeProvider', () => {
     provider.dispose();
   });
 
-  it('includes device count and source in host description when snapshot is available', () => {
+  it('keeps the idle ratio and time in host description and moves source to the tooltip', () => {
 
     const record = makeRecord({
       state: 'idle',
@@ -144,9 +144,32 @@ describe('NpuTreeProvider', () => {
     });
     const provider = new NpuTreeProvider(makeService([record]) as never);
     const item = provider.getTreeItem(new HostNode(record));
-    expect(typeof item.description).toBe('string');
-    expect(item.description as string).toContain('2 NPU');
-    expect(item.description as string).toContain('npu-smi');
+    expect(item.description as string).toMatch(/^0\/2 idle NPUs · /);
+    expect(item.description as string).not.toContain('2 NPU ·');
+    expect(item.description as string).not.toContain('npu-smi');
+    expect((item.tooltip as { value: string }).value).toContain('Status: Idle');
+    expect((item.tooltip as { value: string }).value).toContain('Source: npu-smi');
+    provider.dispose();
+  });
+
+  it('keeps exceptional states visible and marks retained NPU data as stale', () => {
+    const record = makeRecord({
+      state: 'timeout', stale: true,
+      snapshot: { source: 'exporter', devices: [makeDevice()], partial: false,
+        collectedAt: Date.now(), durationMs: 1 },
+    });
+    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const item = provider.getTreeItem(new HostNode(record));
+    expect(item.description as string).toMatch(/^Timed out · Stale · 0\/1 idle NPUs · /);
+    expect((item.tooltip as { value: string }).value).toContain('Source: Exporter');
+    record.state = 'partial';
+    record.stale = false;
+    expect(provider.getTreeItem(new HostNode(record)).description as string)
+      .toMatch(/^Partial data · 0\/1 idle NPUs · /);
+    record.state = 'idle';
+    record.snapshot!.collectedAt = Date.now() - 361000;
+    expect(provider.getTreeItem(new HostNode(record)).description as string)
+      .toMatch(/^Idle · Stale · 0\/1 idle NPUs · /);
     provider.dispose();
   });
 

@@ -22,6 +22,7 @@
   "Missing configuration": "配置已缺失",
   "Target: {0}": "目标：{0}",
   "Status: {0}": "状态：{0}",
+  "Source: {0}": "采集来源：{0}",
   "Subscribed: {0}": "已订阅：{0}",
   "Updated: {0}": "更新时间：{0}",
   "{0} processes": "{0} 个进程",

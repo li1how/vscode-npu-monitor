@@ -20,7 +20,7 @@
   "configuration.connectTimeoutSeconds": "SSH connection timeout in seconds.",
   "configuration.exporterProbeTimeoutSeconds": "Total timeout for probing NPU-Exporter metrics.",
   "configuration.npuSmiTimeoutSeconds": "Timeout for npu-smi info.",
-  "configuration.maxConcurrentHosts": "Maximum hosts scanned concurrently.",
+  "configuration.maxConcurrentHosts": "Maximum hosts scanned concurrently in this VS Code window.",
   "configuration.excludedHosts": "SSH Host aliases excluded from the monitor.",
   "configuration.pollIntervalSeconds": "Automatic NPU polling interval.",
   "configuration.idleScope": "Whether all cards or any card must be idle.",

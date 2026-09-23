@@ -39,7 +39,7 @@ export function renderIdleHistory(history: HostHistoryView, now = Date.now(), no
     binsByTime: new Map(card.bins),
   }));
   const days: string[] = [];
-  for (let day = 0; day < history.retentionDays; day += 1) {
+  for (let day = history.retentionDays - 1; day >= 0; day -= 1) {
     const dayStart = start + day * DAY_MS;
     const dayEnd = dayStart + DAY_MS;
     const rows = cards.map(card => {

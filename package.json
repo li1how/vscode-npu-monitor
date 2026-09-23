@@ -155,12 +155,12 @@
         {
           "command": "npuMonitor.reloadConfig",
           "when": "view == npuMonitor.hosts",
-          "group": "navigation@3"
+          "group": "2_actions@3"
         },
         {
           "command": "npuMonitor.openSettings",
           "when": "view == npuMonitor.hosts",
-          "group": "2_actions@4"
+          "group": "2_actions@5"
         },
         {
           "command": "npuMonitor.scanSelected",
@@ -175,7 +175,7 @@
         {
           "command": "npuMonitor.showOutput",
           "when": "view == npuMonitor.hosts",
-          "group": "2_actions@3"
+          "group": "2_actions@4"
         },
         {
           "command": "npuMonitor.chooseIdleHost",
@@ -202,7 +202,7 @@
         {
           "command": "npuMonitor.openSshTerminal",
           "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
-          "group": "inline@4"
+          "group": "2_open@2"
         },
         {
           "command": "npuMonitor.scanSelected",
@@ -298,7 +298,7 @@
         },
         "npuMonitor.maxConcurrentHosts": {
           "type": "number",
-          "default": 6,
+          "default": 8,
           "minimum": 1,
           "maximum": 32,
           "scope": "machine",

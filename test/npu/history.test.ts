@@ -35,8 +35,10 @@ beforeEach(() => resetVscodeMock());
 describe('per-NPU idle history', () => {
   it('persists continuous idle time and ranks any-card or all-card candidates consistently', async () => {
     const settings = getSettings();
-    expect(settings).toMatchObject({ pollIntervalSeconds: 180, autoRefreshAllHosts: true,
-      idleHistoryRetentionDays: 7, idleScope: 'anyCard' });
+    expect(settings).toMatchObject({ maxConcurrentHosts: 8, pollIntervalSeconds: 180,
+      autoRefreshAllHosts: true, idleHistoryRetentionDays: 7, idleScope: 'anyCard' });
+    configurationValues.set('npuMonitor.maxConcurrentHosts', 3);
+    expect(getSettings().maxConcurrentHosts).toBe(3);
     configurationValues.set('npuMonitor.pollIntervalSeconds', 45);
     expect(getSettings().pollIntervalSeconds).toBe(45);
     const state = memory();

@@ -7,6 +7,18 @@ import { resetVscodeMock } from '../mocks/vscode.js';
 beforeEach(() => resetVscodeMock());
 
 describe('idle history chart', () => {
+  it('shows the newest day section first while keeping each day chronological', () => {
+    const now = Math.floor(Date.UTC(2026, 8, 23, 12) / HISTORY_BUCKET_MS) * HISTORY_BUCKET_MS;
+    const html = renderIdleHistory({ alias: 'alpha', retentionDays: 3, cards: [] }, now);
+    const dayStart = now - (3 * 24 * 60 * 60 * 1000 - HISTORY_BUCKET_MS);
+    const headings = [...html.matchAll(/<section><h2>(.*?)<\/h2>/g)].map(match => match[1]);
+    expect(headings).toHaveLength(3);
+    for (let day = 0; day < 3; day += 1) {
+      const start = dayStart + (2 - day) * 24 * 60 * 60 * 1000;
+      expect(headings[day]).toContain(new Date(start).toLocaleString());
+    }
+  });
+
   it('renders each card, observed states, unknown gaps and a restrictive CSP', () => {
     const now = Math.floor(Date.UTC(2026, 8, 23, 12) / HISTORY_BUCKET_MS) * HISTORY_BUCKET_MS;
     const html = renderIdleHistory({

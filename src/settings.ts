@@ -21,7 +21,7 @@ export function getSettings(): MonitorSettings {
     connectTimeoutSeconds: numberSetting(config, 'connectTimeoutSeconds', 8),
     exporterProbeTimeoutSeconds: numberSetting(config, 'exporterProbeTimeoutSeconds', 2),
     npuSmiTimeoutSeconds: numberSetting(config, 'npuSmiTimeoutSeconds', 10),
-    maxConcurrentHosts: Math.max(1, Math.floor(numberSetting(config, 'maxConcurrentHosts', 6))),
+    maxConcurrentHosts: Math.max(1, Math.floor(numberSetting(config, 'maxConcurrentHosts', 8))),
     excludedHosts: config.get<string[]>('excludedHosts', []),
     pollIntervalSeconds: Math.max(10, numberSetting(config, 'pollIntervalSeconds', 180)),
     autoRefreshAllHosts: config.get<boolean>('autoRefreshAllHosts', true),
