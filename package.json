@@ -2,7 +2,7 @@
   "name": "vscode-npu-monitor",
   "displayName": "%extension.displayName%",
   "description": "%extension.description%",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -457,9 +457,9 @@
     "@types/vscode": "1.100.0",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.2",
-    "eslint": "^10.10.0",
+    "eslint": "^10.11.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.70.0",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^4.1.11"
   }
 }
