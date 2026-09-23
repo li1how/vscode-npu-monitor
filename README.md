@@ -9,8 +9,9 @@ interfaces that follow the VS Code language setting.
 ## Features
 
 - Load hosts automatically from an OpenSSH configuration file.
-- Scan all hosts, one host, or multiple selected hosts manually.
-- Subscribe to idle notifications and poll only subscribed hosts automatically.
+- Refresh NPU status for all hosts automatically, or scan all, one, or selected hosts manually.
+- Track per-NPU idle history and choose hosts by observed continuous idle time.
+- Subscribe to idle notifications; containers refresh on startup and manual scans.
 - Prefer NPU-Exporter `/metrics` and quickly fall back to `npu-smi info`.
 - Display health, utilization, HBM, temperature, power, and processes per physical NPU.
 - Monitor Docker containers with Dev Container and workspace directory filters.
@@ -19,8 +20,9 @@ interfaces that follow the VS Code language setting.
 - Distinguish connection timeouts, authentication failures, host key errors,
   and collection failures.
 
-Automatic scans access only subscribed hosts. Manual scans never change the
-subscription list.
+The first automatic scan collects NPU and container data from all configured hosts by default.
+Periodic scans refresh NPU data only; subscribed hosts receive idle notifications.
+Manual scans refresh both data types without changing subscriptions.
 
 ![Usage demo](media/demo.gif)
 
@@ -79,24 +81,29 @@ archives in zip and tar.gz formats.
 ## Usage
 
 1. Open **NPU Monitor** in the Activity Bar.
-2. On first use, the extension loads the SSH configuration without scanning
-   every host.
+2. On first use, the extension loads the SSH configuration and scans all hosts
+   for NPU and container status.
 3. Select the refresh icon in the view title to scan all hosts.
 4. Use the refresh icon on a host to scan it, or select multiple hosts and run
    **Scan Selected Hosts**.
 5. Use the terminal icon on a host to open an SSH terminal. Right-click a host
    to copy its connection information; multiple selected hosts are supported.
-6. Select the bell icon to subscribe to a host. It is scanned immediately and
-   included in periodic polling.
-7. VS Code displays a notification when a subscribed host becomes idle.
+6. Select the bell icon to subscribe to a host. It is scanned immediately; periodic
+   NPU scans can send idle notifications.
+7. Use the view-title **Choose Idle Host** button to rank fresh candidates by the longest
+   observed continuous idle time. Selecting one reveals and expands its tree row. Use
+   the history icon beside each host's bell to view its per-NPU timeline.
 8. Expand a host to view NPU and container status. Use a running container's
    new-window icon to attach in a separate VS Code window.
 9. Use a container's copy icon for **Copy Summary**, or the context menu for
    **Copy Full Information**. Both support multiple selected containers.
 
-Scans collect NPU data first, followed by read-only Docker queries. Dev Containers
+Startup and manual scans collect NPU data first, followed by read-only Docker queries. Dev Containers
 are shown by default and use the configured project name when available. Failed
-scans retain the last successful data with a **Stale** marker.
+scans retain the last successful data with a **Stale** marker. Idle history starts
+with this version and is stored locally in the current extension environment; a failed,
+partial, or overdue observation never extends a continuous idle period. Changing the
+per-card idle threshold or process rule starts a new history under the new rule.
 
 Remote - SSH must use the same SSH configuration and host aliases as NPU Monitor
 when opening a container.
@@ -111,7 +118,12 @@ Only one window can listen on a given port; clients should run in the same envir
 Choose **Copy MCP environment variables** to obtain the endpoint and token. Configure
 your client to use Streamable HTTP with the URL from `NPU_MONITOR_MCP_URL` and an
 `Authorization: Bearer <token>` header using `NPU_MONITOR_MCP_TOKEN`. The copied values
-contain credentials. Cached idle status is not a resource reservation.
+contain credentials. Cached idle status is not a resource reservation. `rank_idle_hosts` and
+`get_idle_history` read locally stored observations without SSH queries. MCP reports
+NPU `collectedAt`, `ageSeconds`, `maxAgeSeconds`, `validUntil` and `outdated`
+for twice the polling interval (360 seconds by default), including in ranked candidates.
+Container `collectedAt` and `ageSeconds` are independent; `maxAgeSeconds`, `validUntil`
+and `outdated` are `null` because containers have no fixed expiry. Check `stale` after failures.
 
 ## Configuration
 
@@ -134,8 +146,10 @@ Search for `NPU Monitor` in VS Code settings:
 | `containers.filterMode` | `devContainers` | Show `all` Docker containers, `devContainers`, or filter by `workspacePaths` |
 | `containers.workspacePaths` | `[]` | Host workspace directories used only in `workspacePaths` mode |
 | `containers.workspaceFile` | Empty | Workspace file name to open instead of the mapped container workspace folder |
-| `pollIntervalSeconds` | `60` | Subscription polling interval, minimum 10 seconds |
-| `idleScope` | `allCards` | Require all cards or any card to be idle |
+| `pollIntervalSeconds` | `180` | Automatic NPU polling interval, minimum 10 seconds |
+| `autoRefreshAllHosts` | `true` | Scan NPU and containers on all hosts at startup, then poll NPU only; disabling this limits startup and polling to subscribed hosts |
+| `idleHistoryRetentionDays` | `7` | Local per-NPU history retention, 1–30 days |
+| `idleScope` | `anyCard` | Require all cards or any card to be idle |
 | `idleRequireNoProcesses` | `true` | Require no NPU processes when determining idle state |
 | `idleUtilizationThresholdPercent` | `1` | Maximum utilization considered idle |
 | `idleConsecutiveChecks` | `1` | Consecutive idle checks required before notification |

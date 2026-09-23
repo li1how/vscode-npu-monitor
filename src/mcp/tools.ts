@@ -6,16 +6,30 @@ import type { MonitorService } from '../monitorService.js';
 import { evaluateSnapshot } from '../npu/idle.js';
 import type { HostRecord, MonitorSettings } from '../types.js';
 
-export type MonitorReader = Pick<MonitorService, 'getRecords' | 'getRecord' | 'scanAliases'>;
+export type MonitorReader = Pick<MonitorService,
+  'getRecords' | 'getRecord' | 'scanAliases' | 'getIdleHistory' | 'getIdleCandidates'>;
 
 export function hostState(record: HostRecord, settings: MonitorSettings, details: boolean, now = Date.now()) {
-  const freshness = (collectedAt: number | undefined, stale: boolean) => ({
+  const observation = (collectedAt: number | undefined, stale: boolean) => ({
     collectedAt: collectedAt ?? null,
     ageSeconds: collectedAt === undefined ? null : Math.max(0, now - collectedAt) / 1000,
     stale,
-    outdated: collectedAt === undefined || now - collectedAt > settings.pollIntervalSeconds * 2000,
   });
-  const npuTime = freshness(record.snapshot?.collectedAt, record.stale);
+  const npuCollectedAt = record.snapshot?.collectedAt;
+  const npuMaxAgeSeconds = settings.pollIntervalSeconds * 2;
+  const npuTime = {
+    ...observation(npuCollectedAt, record.stale),
+    maxAgeSeconds: npuMaxAgeSeconds,
+    validUntil: npuCollectedAt === undefined ? null : npuCollectedAt + npuMaxAgeSeconds * 1000,
+    outdated: npuCollectedAt === undefined || now < npuCollectedAt ||
+      now - npuCollectedAt > npuMaxAgeSeconds * 1000,
+  };
+  const containerTime = {
+    ...observation(record.devContainers?.snapshot?.collectedAt, record.devContainers?.stale ?? false),
+    maxAgeSeconds: null,
+    validUntil: null,
+    outdated: null,
+  };
   const containers = settings.devContainersEnabled
     ? filterContainers(record.devContainers?.snapshot?.containers ?? [], settings) : [];
   const valid = !npuTime.stale && !npuTime.outdated &&
@@ -29,7 +43,7 @@ export function hostState(record: HostRecord, settings: MonitorSettings, details
       error: record.error ?? null, idle: idle ? idle.state === 'idle' : null,
       idleDevices: idle?.idleDevices ?? null, deviceCount: record.snapshot?.devices.length ?? null,
       ...(details ? { devices: record.snapshot?.devices ?? [] } : {}) },
-    containers: { ...freshness(record.devContainers?.snapshot?.collectedAt, record.devContainers?.stale ?? false),
+    containers: { ...containerTime,
       enabled: settings.devContainersEnabled, state: record.devContainers?.state ?? 'unknown',
       refreshing: record.devContainers?.refreshing ?? false, error: record.devContainers?.error ?? null,
       filterMode: settings.containerFilterMode, workspacePaths: settings.containerWorkspacePaths,
@@ -39,22 +53,45 @@ export function hostState(record: HostRecord, settings: MonitorSettings, details
 
 export function createMonitorMcp(service: MonitorReader, settings: () => MonitorSettings): McpServer {
   const server = new McpServer({ name: 'npu-monitor', version: '1.0.0' }, {
-    instructions: 'Queries read cached snapshots. Check collectedAt, stale and outdated before choosing a host. Idle is not a reservation. refresh_hosts explicitly refreshes selected SSH aliases without changing subscriptions. Initialization and execution belong to external tools.',
+    instructions: 'Queries read cached snapshots and idle history. NPU snapshots expire after twice the poll interval; container snapshots have no fixed expiry, so check their collectedAt, ageSeconds and stale fields. rank_idle_hosts uses only fresh NPU observations; idle is not a reservation. refresh_hosts explicitly refreshes selected SSH aliases without changing subscriptions. Initialization and execution belong to external tools.',
   });
   const result = (data: Record<string, unknown>) => ({
     content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data,
   });
   const annotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
+  const withHistory = (record: HostRecord, details: boolean) => {
+    const history = service.getIdleHistory(record.host.alias);
+    return {
+      ...hostState(record, settings(), details),
+      idleHistory: details ? history : {
+        alias: history.alias,
+        retentionDays: history.retentionDays,
+        cards: history.cards.map(({ id, state, observedAt, idleSince }) =>
+          ({ id, state, observedAt, idleSince })),
+      },
+    };
+  };
   server.registerTool('list_hosts', { description: 'List cached host summaries; no SSH queries.', annotations },
-    () => result({ hosts: service.getRecords().map(r => hostState(r, settings(), false)) }));
+    () => result({ hosts: service.getRecords().map(r => withHistory(r, false)) }));
   server.registerTool('get_host_state', {
     description: 'Read cached NPU, process and filtered container details for one SSH alias.',
     inputSchema: { host: z.string().min(1) }, annotations,
   }, ({ host }) => {
     const record = service.getRecord(host);
     if (!record) throw new Error('Unknown SSH host');
-    return result(hostState(record, settings(), true));
+    return result(withHistory(record, true));
   });
+  server.registerTool('get_idle_history', {
+    description: 'Read cached per-NPU idle history for one SSH alias; no SSH query.',
+    inputSchema: { host: z.string().min(1) }, annotations,
+  }, ({ host }) => {
+    if (!service.getRecord(host)) throw new Error('Unknown SSH host');
+    return result({ history: service.getIdleHistory(host) });
+  });
+  server.registerTool('rank_idle_hosts', {
+    description: 'Rank recently observed idle hosts by continuous idle duration; no SSH query.',
+    annotations,
+  }, () => result({ candidates: service.getIdleCandidates() }));
   server.registerTool('refresh_hosts', {
     description: 'Refresh explicitly named SSH hosts and return snapshots; does not subscribe hosts.',
     inputSchema: { hosts: z.array(z.string().min(1)).min(1).max(100) },
@@ -67,7 +104,7 @@ export function createMonitorMcp(service: MonitorReader, settings: () => Monitor
     await service.scanAliases(aliases);
     return result({ hosts: aliases.map(alias => {
       const record = service.getRecord(alias);
-      return record ? hostState(record, settings(), true) : { host: alias, error: 'Host removed' };
+      return record ? withHistory(record, true) : { host: alias, error: 'Host removed' };
     }) });
   });
   return server;

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scan NPU and containers on startup, then refresh NPU status every 180 seconds by default. Show per-NPU idle history and ranked candidates in the UI and MCP with separate data freshness.
+
 ## 0.2.2
 
 - Expose cached monitoring and explicit refresh through authenticated MCP, with panel status and environment-variable copy for Codex and Claude Code.

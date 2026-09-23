@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
 import { openSshTerminal } from '../src/extension.js';
@@ -33,6 +35,25 @@ function hostNode(alias = 'alpha'): HostNode {
   };
   return new HostNode(record);
 }
+
+describe('view action placement', () => {
+  it('shows history beside subscriptions and makes host selection a title action', () => {
+    const manifest = JSON.parse(readFileSync('package.json', 'utf8')) as {
+      contributes: { menus: Record<string, Array<{ command: string; group: string }>> };
+    };
+    const title = manifest.contributes.menus['view/title']!;
+    const host = manifest.contributes.menus['view/item/context']!;
+    const group = (items: typeof title, command: string) =>
+      items.find(item => item.command === command)?.group;
+    expect(group(title, 'npuMonitor.scanAll')).toBe('navigation@1');
+    expect(group(title, 'npuMonitor.chooseIdleHost')).toBe('navigation@2');
+    expect(group(title, 'npuMonitor.reloadConfig')).toBe('navigation@3');
+    expect(group(title, 'npuMonitor.openSettings')).not.toMatch(/^navigation/);
+    expect(group(host, 'npuMonitor.subscribeHost')).toBe('inline@2');
+    expect(group(host, 'npuMonitor.showIdleHistory')).toBe('inline@3');
+    expect(group(host, 'npuMonitor.openSshTerminal')).toBe('inline@4');
+  });
+});
 
 describe('extension commands', () => {
   it('opens an SSH terminal for a host without starting a Remote - SSH connection', () => {

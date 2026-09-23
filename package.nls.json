@@ -22,7 +22,7 @@
   "configuration.npuSmiTimeoutSeconds": "Timeout for npu-smi info.",
   "configuration.maxConcurrentHosts": "Maximum hosts scanned concurrently.",
   "configuration.excludedHosts": "SSH Host aliases excluded from the monitor.",
-  "configuration.pollIntervalSeconds": "Polling interval for subscribed hosts.",
+  "configuration.pollIntervalSeconds": "Automatic NPU polling interval.",
   "configuration.idleScope": "Whether all cards or any card must be idle.",
   "configuration.idleScope.allCards": "All healthy cards must be idle.",
   "configuration.idleScope.anyCard": "At least one healthy card must be idle.",
@@ -44,5 +44,9 @@
   "command.copyContainerSummary": "Copy Summary",
   "command.mcpMenu": "Manage MCP service",
   "configuration.mcp.enabled": "Enable the local MCP service for this workspace.",
-  "configuration.mcp.port": "Local MCP port. Restart clients after changing it."
+  "configuration.mcp.port": "Local MCP port. Restart clients after changing it.",
+  "command.chooseIdleHost": "NPU Monitor: Choose Idle Host",
+  "command.showIdleHistory": "NPU Monitor: Show Idle History",
+  "configuration.autoRefreshAllHosts": "Scan all configured SSH hosts at startup for NPU and container status, then refresh NPU status automatically. Subscribed hosts receive idle notifications.",
+  "configuration.idleHistoryRetentionDays": "Days of locally stored per-NPU idle history (1–30)."
 }

@@ -22,7 +22,7 @@
   "configuration.npuSmiTimeoutSeconds": "npu-smi info 超时时间。",
   "configuration.maxConcurrentHosts": "同时扫描的最大机器数。",
   "configuration.excludedHosts": "不参与监控的 SSH Host 别名。",
-  "configuration.pollIntervalSeconds": "已订阅机器的轮询周期。",
+  "configuration.pollIntervalSeconds": "NPU 自动轮询周期。",
   "configuration.idleScope": "要求全部卡空闲或任一卡空闲。",
   "configuration.idleScope.allCards": "所有健康卡均须空闲。",
   "configuration.idleScope.anyCard": "至少一张健康卡空闲。",
@@ -44,5 +44,9 @@
   "command.copyContainerSummary": "复制精简信息",
   "command.mcpMenu": "管理 MCP 服务",
   "configuration.mcp.enabled": "为当前工作区启用本地 MCP 服务。",
-  "configuration.mcp.port": "本地 MCP 端口，修改后需更新客户端配置。"
+  "configuration.mcp.port": "本地 MCP 端口，修改后需更新客户端配置。",
+  "command.chooseIdleHost": "NPU 监控: 选择空闲机器",
+  "command.showIdleHistory": "NPU 监控: 查看空闲历史",
+  "configuration.autoRefreshAllHosts": "启动首轮扫描全部已配置 SSH 主机的 NPU 和容器，此后定时刷新 NPU。已订阅主机可接收空闲提醒。",
+  "configuration.idleHistoryRetentionDays": "逐卡空闲历史在本地保留的天数（1–30）。"
 }

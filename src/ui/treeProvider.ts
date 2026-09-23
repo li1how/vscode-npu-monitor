@@ -8,6 +8,7 @@ import type { MonitorService } from '../monitorService.js';
 import { getSettings } from '../settings.js';
 import type { DevContainer, DevContainerState, HostRecord, HostState, NpuDevice } from '../types.js';
 import { McpNode, ContainerNode, DeviceNode, GroupNode, HostNode, StatusNode, type MonitorNode } from './nodes.js';
+import { formatDuration } from './idleHistory.js';
 
 function visibleContainers(record: HostRecord): DevContainer[] {
   return filterContainers(record.devContainers?.snapshot?.containers ?? [], getSettings());
@@ -144,6 +145,14 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
     return [];
   }
 
+  public getParent(element: MonitorNode): MonitorNode | undefined {
+    if (element instanceof GroupNode) return new HostNode(element.record);
+    if (element instanceof DeviceNode) return getSettings().devContainersEnabled
+      ? new GroupNode(element.record, 'npu') : new HostNode(element.record);
+    if (element instanceof ContainerNode) return new GroupNode(element.record, 'containers');
+    return undefined;
+  }
+
   public getTreeItem(element: MonitorNode): vscode.TreeItem {
     if (element instanceof McpNode) {
       const item = new vscode.TreeItem('MCP');
@@ -254,6 +263,21 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
     item.description = record.snapshot
       ? state + ' · ' + record.snapshot.devices.length + ' NPU · ' + source
       : state;
+    if (record.snapshot) {
+      const now = Date.now();
+      const fresh = !record.stale && now >= record.snapshot.collectedAt && now - record.snapshot.collectedAt <=
+        getSettings().pollIntervalSeconds * 2000;
+      const history = this.service.getIdleHistory(record.host.alias, now);
+      const ids = new Set(record.snapshot.devices.map(device => device.id));
+      const idleCards = fresh ? history.cards.filter(card => ids.has(card.id) && card.idleSince !== null) : [];
+      item.description += ' · ' + vscode.l10n.t('{0}/{1} idle NPUs',
+        idleCards.length, record.snapshot.devices.length);
+      if (idleCards.length) {
+        const longest = Math.min(...idleCards.map(card => card.idleSince!));
+        item.description += ' · ' + vscode.l10n.t('Longest idle: {0}', formatDuration(now - longest));
+      }
+      item.description += ' · ' + new Date(record.snapshot.collectedAt).toLocaleTimeString();
+    }
     if (getSettings().devContainersEnabled && record.devContainers?.snapshot) {
       item.description += ' · ' + visibleContainers(record).length + ' ' + containerGroupLabel() +
         (record.devContainers.stale ? ' · ' + vscode.l10n.t('Stale') : '');
@@ -288,6 +312,9 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
   private deviceTreeItem(record: HostRecord, device: NpuDevice): vscode.TreeItem {
     const item = new vscode.TreeItem('NPU ' + device.id);
     const processCount = device.processCount ?? device.processes.length;
+    const now = Date.now();
+    const history = this.service.getIdleHistory(record.host.alias, now).cards.find(card => card.id === device.id);
+    const idleSince = record.stale ? null : history?.idleSince ?? null;
     const details = [
       formatNumber(device.utilizationPercent, '%'),
       device.hbmUsedMb !== undefined && device.hbmTotalMb !== undefined
@@ -295,6 +322,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
         : undefined,
       formatNumber(device.temperatureC, '°C'),
       vscode.l10n.t('{0} processes', processCount),
+      idleSince === null ? undefined : vscode.l10n.t('Idle for {0}', formatDuration(now - idleSince)),
     ].filter((value): value is string => Boolean(value));
     item.description = details.join(' · ');
     item.contextValue = 'npuDevice';
@@ -311,6 +339,10 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
       'Utilization: {0}',
       formatNumber(device.utilizationPercent, '%'),
     ));
+    if (history?.observedAt !== null && history?.observedAt !== undefined) {
+      tooltip.appendMarkdown('  \n' + vscode.l10n.t('Updated: {0}',
+        new Date(history.observedAt).toLocaleString()));
+    }
     if (device.processes.length > 0) {
       tooltip.appendMarkdown('  \n\n' + vscode.l10n.t('Processes:') + '  \n');
       for (const process of device.processes) {

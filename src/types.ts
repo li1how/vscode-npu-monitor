@@ -117,6 +117,8 @@ export interface MonitorSettings {
   maxConcurrentHosts: number;
   excludedHosts: string[];
   pollIntervalSeconds: number;
+  autoRefreshAllHosts: boolean;
+  idleHistoryRetentionDays: number;
   idleScope: 'allCards' | 'anyCard';
   idleRequireNoProcesses: boolean;
   idleUtilizationThresholdPercent: number;

@@ -43,10 +43,12 @@ function makeDevice(overrides: Partial<NpuDevice> = {}): NpuDevice {
 
 function makeService(records: HostRecord[]): {
   getRecords: () => HostRecord[];
+  getIdleHistory: (alias: string) => { alias: string; retentionDays: number; cards: [] };
   onDidChange: (listener: () => void) => { dispose: () => void };
 } {
   return {
     getRecords: () => records,
+    getIdleHistory: alias => ({ alias, retentionDays: 7, cards: [] }),
     onDidChange: () => ({ dispose: () => { /* noop */ } }),
   };
 }
@@ -96,6 +98,14 @@ describe('NpuTreeProvider', () => {
     const hostNode = new HostNode(record);
     const children = provider.getChildren(hostNode);
     expect(children).toHaveLength(0);
+    provider.dispose();
+  });
+
+  it('provides root parents so the idle picker can reveal host nodes', () => {
+    const record = makeRecord();
+    const provider = new NpuTreeProvider(makeService([record]) as never);
+    expect(provider.getParent(new HostNode(record))).toBeUndefined();
+    expect(provider.getParent(new DeviceNode(record, makeDevice()))).toBeInstanceOf(HostNode);
     provider.dispose();
   });
 

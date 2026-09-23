@@ -7,6 +7,7 @@ import { currentSshEnvironment, detectSshExecutablePath } from './ssh/config.js'
 import { buildInteractiveSshArguments } from './ssh/runner.js';
 import { copyContainerInfo, copyContainerSummary, openDevContainer, openSshWindow } from './ui/containerActions.js';
 import { copyHostInfo } from './ui/hostActions.js';
+import { formatDuration, showIdleHistory } from './ui/idleHistory.js';
 import { HostNode, type ContainerNode, type MonitorNode } from './ui/nodes.js';
 import { NpuTreeProvider } from './ui/treeProvider.js';
 
@@ -108,6 +109,35 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         (token, report) => service.scanAll(token, report),
       );
     }),
+    vscode.commands.registerCommand('npuMonitor.chooseIdleHost', async () => {
+      const candidates = service.getIdleCandidates();
+      if (!candidates.length) {
+        void vscode.window.showInformationMessage(vscode.l10n.t('No recently observed idle NPU hosts.'));
+        return;
+      }
+      const selected = await vscode.window.showQuickPick(candidates.map(candidate => ({
+        label: candidate.alias,
+        description: vscode.l10n.t('Idle for {0} · {1}/{2} NPUs',
+          formatDuration(candidate.durationMs), candidate.idleDevices, candidate.deviceCount),
+        detail: (candidate.deviceId === null ? vscode.l10n.t('All NPUs') : 'NPU ' + candidate.deviceId) +
+          ' · ' + vscode.l10n.t('Updated: {0}', new Date(candidate.observedAt).toLocaleString()),
+        alias: candidate.alias,
+      })), { placeHolder: vscode.l10n.t('Choose an idle NPU host') });
+      if (!selected) return;
+      const node = provider.getChildren().find((item): item is HostNode =>
+        item instanceof HostNode && item.record.host.alias === selected.alias);
+      if (node) await treeView.reveal(node, { select: true, focus: true, expand: true });
+    }),
+    vscode.commands.registerCommand('npuMonitor.showIdleHistory', async (node?: HostNode) => {
+      let alias = node?.record.host.alias;
+      if (!alias) {
+        const selected = await vscode.window.showQuickPick(service.getRecords().map(record => ({
+          label: record.host.alias,
+        })), { placeHolder: vscode.l10n.t('Choose a host for idle history') });
+        alias = selected?.label;
+      }
+      if (alias) showIdleHistory(service, alias);
+    }),
     vscode.commands.registerCommand('npuMonitor.reloadConfig', async () => {
       await service.reloadConfig();
     }),
@@ -197,7 +227,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     }),
   );
 
-  await service.initialize();
+  const initialScan = service.initialize();
+  void initialScan.catch(error => output.appendLine('Initial scan failed: ' + String(error)));
   await mcp.configure();
   updateBadge();
 }

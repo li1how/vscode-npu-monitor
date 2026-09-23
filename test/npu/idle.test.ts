@@ -13,7 +13,7 @@ const settings: MonitorSettings = {
   npuSmiTimeoutSeconds: 10,
   maxConcurrentHosts: 6,
   excludedHosts: [],
-  pollIntervalSeconds: 60,
+  pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7,
   idleScope: 'allCards',
   idleRequireNoProcesses: true,
   idleUtilizationThresholdPercent: 1,

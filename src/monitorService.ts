@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { DevContainerCollector } from './containers/collector.js';
 import { NpuCollector } from './npu/collector.js';
 import { evaluateSnapshot } from './npu/idle.js';
+import { IdleHistoryStore, type HostHistoryView, type IdleCandidate } from './npu/history.js';
 import { getSettings } from './settings.js';
 import { currentSshEnvironment, loadSshHosts } from './ssh/config.js';
 import { SshRunner } from './ssh/runner.js';
@@ -18,7 +19,9 @@ export interface ScanProgress {
 
 export class MonitorService implements vscode.Disposable {
   private readonly records = new Map<string, HostRecord>();
-  private readonly inFlight = new Map<string, Promise<void>>();
+  private readonly inFlight = new Map<string, { task: Promise<void>; includeContainers: boolean }>();
+  private readonly containerInFlight = new Map<string, Promise<void>>();
+  private readonly history: IdleHistoryStore;
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   private collector?: NpuCollector;
   private devContainerCollector?: DevContainerCollector;
@@ -32,6 +35,7 @@ export class MonitorService implements vscode.Disposable {
     private readonly context: vscode.ExtensionContext,
     private readonly output: vscode.OutputChannel,
   ) {
+    this.history = new IdleHistoryStore(context.globalState);
     this.subscriptions = new Set(
       context.workspaceState.get<string[]>(SUBSCRIPTIONS_KEY, []),
     );
@@ -47,14 +51,21 @@ export class MonitorService implements vscode.Disposable {
     return this.records.get(alias);
   }
 
+  public getIdleHistory(alias: string, now = Date.now()): HostHistoryView {
+    return this.history.getHistory(alias, getSettings(), now, this.records.get(alias)?.host);
+  }
+
+  public getIdleCandidates(now = Date.now()): IdleCandidate[] {
+    return this.history.getCandidates(this.getRecords(), getSettings(), now);
+  }
+
   public async initialize(): Promise<void> {
     await this.reloadConfig(false);
-    const subscribed = this.getRecords().filter(record =>
-      record.subscribed && record.state !== 'missingConfig',
+    const settings = getSettings();
+    const records = this.getRecords().filter(record =>
+      record.state !== 'missingConfig' && (settings.autoRefreshAllHosts || record.subscribed),
     );
-    if (subscribed.length > 0) {
-      await this.scanRecords(subscribed);
-    }
+    await this.scanRecords(records);
     this.restartTimer();
   }
 
@@ -174,7 +185,7 @@ export class MonitorService implements vscode.Disposable {
       clearInterval(this.pollTimer);
       this.pollTimer = undefined;
     }
-    if (this.subscriptions.size === 0) {
+    if (this.subscriptions.size === 0 && !getSettings().autoRefreshAllHosts) {
       return;
     }
     const intervalMs = getSettings().pollIntervalSeconds * 1000;
@@ -210,10 +221,11 @@ export class MonitorService implements vscode.Disposable {
     this.automaticScanRunning = true;
     try {
       await this.reloadConfig(false);
+      const settings = getSettings();
       const records = this.getRecords().filter(record =>
-        record.subscribed && record.state !== 'missingConfig',
+        record.state !== 'missingConfig' && (settings.autoRefreshAllHosts || record.subscribed),
       );
-      await this.scanRecords(records);
+      await this.scanRecords(records, undefined, undefined, false);
     } finally {
       this.automaticScanRunning = false;
     }
@@ -223,6 +235,7 @@ export class MonitorService implements vscode.Disposable {
     records: HostRecord[],
     token?: vscode.CancellationToken,
     onProgress?: (progress: ScanProgress) => void,
+    includeContainers: boolean | ((record: HostRecord) => boolean) = true,
   ): Promise<void> {
     const total = records.length;
     let completed = 0;
@@ -236,35 +249,47 @@ export class MonitorService implements vscode.Disposable {
         if (!record) {
           continue;
         }
-        await this.scanRecord(record, token);
+        await this.scanRecord(record, token, typeof includeContainers === 'boolean'
+          ? includeContainers : includeContainers(record));
         completed += 1;
         onProgress?.({ completed, total, alias: record.host.alias });
       }
     };
     await Promise.all(Array.from({ length: workerCount }, worker));
+    try {
+      await this.history.persist(getSettings());
+    } catch (error) {
+      this.log('Idle history persistence failed: ' + String(error));
+    }
   }
 
   private async scanRecord(
     record: HostRecord,
     token?: vscode.CancellationToken,
+    includeContainers = true,
   ): Promise<void> {
-    const existing = this.inFlight.get(record.host.alias);
+    const alias = record.host.alias;
+    const existing = this.inFlight.get(alias);
     if (existing) {
-      await existing;
+      await existing.task;
+      if (includeContainers && !existing.includeContainers && !token?.isCancellationRequested) {
+        await this.scanContainers(record, token);
+      }
       return;
     }
-    const task = this.performScan(record, token);
-    this.inFlight.set(record.host.alias, task);
+    const task = this.performScan(record, token, includeContainers);
+    this.inFlight.set(alias, { task, includeContainers });
     try {
       await task;
     } finally {
-      this.inFlight.delete(record.host.alias);
+      this.inFlight.delete(alias);
     }
   }
 
   private async performScan(
     record: HostRecord,
     token?: vscode.CancellationToken,
+    includeContainers = true,
   ): Promise<void> {
     if (!this.collector) {
       return;
@@ -273,7 +298,6 @@ export class MonitorService implements vscode.Disposable {
     record.error = undefined;
     this.changeEmitter.fire();
     this.log(record.host.alias + ': scan started');
-    const containerCollector = this.devContainerCollector;
     const result = await this.collector.scan(record.host, token);
     if (token?.isCancellationRequested) {
       record.refreshing = false;
@@ -281,6 +305,7 @@ export class MonitorService implements vscode.Disposable {
       return;
     }
 
+    this.history.observe(record.host, result.snapshot, getSettings());
     if (result.snapshot) {
       const evaluated = evaluateSnapshot(result.snapshot, getSettings());
       record.snapshot = result.snapshot;
@@ -313,7 +338,20 @@ export class MonitorService implements vscode.Disposable {
       this.log(record.host.alias + ': ' + result.state + ' - ' + (result.error ?? 'unknown error'));
     }
     this.changeEmitter.fire();
-    if (containerCollector && getSettings().devContainersEnabled && !token?.isCancellationRequested) {
+    if (includeContainers && !token?.isCancellationRequested) {
+      await this.scanContainers(record, token);
+    }
+    record.refreshing = false;
+    this.changeEmitter.fire();
+  }
+
+  private async scanContainers(record: HostRecord, token?: vscode.CancellationToken): Promise<void> {
+    const collector = this.devContainerCollector;
+    if (!collector || !getSettings().devContainersEnabled || token?.isCancellationRequested) return;
+    const alias = record.host.alias;
+    const existing = this.containerInFlight.get(alias);
+    if (existing) return existing;
+    const task = (async () => {
       const previous = record.devContainers;
       record.devContainers = {
         state: previous?.state ?? 'unknown',
@@ -322,7 +360,7 @@ export class MonitorService implements vscode.Disposable {
         stale: previous?.stale ?? false,
       };
       this.changeEmitter.fire();
-      const containers = await containerCollector.scan(record.host, token);
+      const containers = await collector.scan(record.host, token);
       if (!token?.isCancellationRequested) {
         record.devContainers = {
           ...containers,
@@ -330,15 +368,20 @@ export class MonitorService implements vscode.Disposable {
           refreshing: false,
           stale: !containers.snapshot && Boolean(previous?.snapshot),
         };
-        this.log(record.host.alias + ': Dev Containers ' + containers.state +
+        this.log(alias + ': Dev Containers ' + containers.state +
           (containers.snapshot ? ' (' + containers.snapshot.containers.length + ')' : '') +
           (containers.error ? ' - ' + containers.error : ''));
       } else {
         record.devContainers = previous;
       }
+      this.changeEmitter.fire();
+    })();
+    this.containerInFlight.set(alias, task);
+    try {
+      await task;
+    } finally {
+      this.containerInFlight.delete(alias);
     }
-    record.refreshing = false;
-    this.changeEmitter.fire();
   }
 
   private async notifyIdle(record: HostRecord): Promise<void> {

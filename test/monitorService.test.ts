@@ -85,7 +85,12 @@ function snapshot(utilizationPercent: number, processCount: number): ScanResult 
 
 function createContext(subscriptions: string[] = []): vscode.ExtensionContext {
   const values = new Map<string, unknown>([['npuMonitor.subscriptions', subscriptions]]);
+  const global = new Map<string, unknown>();
   return {
+    globalState: {
+      get<T>(key: string): T | undefined { return global.get(key) as T | undefined; },
+      async update(key: string, value: unknown): Promise<void> { global.set(key, value); },
+    },
     workspaceState: {
       get<T>(key: string, defaultValue?: T): T | undefined {
         return (values.has(key) ? values.get(key) : defaultValue) as T | undefined;
@@ -97,9 +102,9 @@ function createContext(subscriptions: string[] = []): vscode.ExtensionContext {
   } as unknown as vscode.ExtensionContext;
 }
 
-function createService(subscriptions: string[] = []): MonitorService {
+function createService(subscriptions: string[] = [], context = createContext(subscriptions)): MonitorService {
   const output = { appendLine: vi.fn() } as unknown as vscode.OutputChannel;
-  return new MonitorService(createContext(subscriptions), output);
+  return new MonitorService(context, output);
 }
 
 describe('monitor scan orchestration', () => {
@@ -128,7 +133,7 @@ describe('monitor scan orchestration', () => {
       npuSmiTimeoutSeconds: 10,
       maxConcurrentHosts: 2,
       excludedHosts: [],
-      pollIntervalSeconds: 3600,
+      pollIntervalSeconds: 3600, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7,
       idleScope: 'allCards',
       idleRequireNoProcesses: true,
       idleUtilizationThresholdPercent: 1,
@@ -152,6 +157,17 @@ describe('monitor scan orchestration', () => {
     await (service as unknown as { runAutomaticScan: () => Promise<void> })
       .runAutomaticScan();
     expect(collectorState.aliases.sort()).toEqual(['alpha', 'beta']);
+    service.dispose();
+  });
+
+  it('starts and periodically refreshes all hosts when enabled', async () => {
+    settingsState.value!.autoRefreshAllHosts = true;
+    const service = createService();
+    await service.initialize();
+    expect(collectorState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
+    collectorState.aliases.length = 0;
+    await (service as unknown as { runAutomaticScan: () => Promise<void> }).runAutomaticScan();
+    expect(collectorState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
     service.dispose();
   });
 
@@ -228,7 +244,7 @@ describe('Dev Container scan orchestration', () => {
       sshConfigPath: configPath, remoteSshConfigFile: '', knownHostsPath: '',
       sshExecutablePath: '/usr/bin/ssh', connectTimeoutSeconds: 8,
       exporterProbeTimeoutSeconds: 2, npuSmiTimeoutSeconds: 10, maxConcurrentHosts: 2,
-      excludedHosts: [], pollIntervalSeconds: 60, idleScope: 'allCards',
+      excludedHosts: [], pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7, idleScope: 'allCards',
       idleRequireNoProcesses: true, idleUtilizationThresholdPercent: 1,
       idleConsecutiveChecks: 1, devContainersEnabled: true, devContainersTimeoutSeconds: 5,
       containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
@@ -295,7 +311,43 @@ describe('Dev Container scan orchestration', () => {
     service.dispose();
   });
 
-  it('scans containers only on subscribed hosts automatically and leaves subscriptions unchanged manually', async () => {
+  it('scans NPU and containers on every host initially, then only NPU periodically', async () => {
+    settingsState.value!.autoRefreshAllHosts = true;
+    const service = createService(['alpha']);
+    await service.initialize();
+    expect(collectorState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
+    expect(containersState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
+    collectorState.aliases.length = 0;
+    containersState.aliases.length = 0;
+    await (service as unknown as { runAutomaticScan: () => Promise<void> }).runAutomaticScan();
+    expect(collectorState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
+    expect(containersState.aliases).toEqual([]);
+    service.dispose();
+  });
+
+  it('adds a container scan when a manual refresh overlaps an NPU-only automatic scan', async () => {
+    settingsState.value!.autoRefreshAllHosts = true;
+    const service = createService();
+    await service.reloadConfig(false);
+    let finish!: () => void;
+    let entered!: () => void;
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const blocked = new Promise<void>(resolve => { finish = resolve; });
+    collectorState.handler = async host => {
+      if (host.alias === 'beta') { entered(); await blocked; }
+      return snapshot(0, 0);
+    };
+    const automatic = (service as unknown as { runAutomaticScan: () => Promise<void> }).runAutomaticScan();
+    await started;
+    const manual = service.scanAliases(['beta']);
+    finish();
+    await Promise.all([automatic, manual]);
+    expect(collectorState.aliases.filter(alias => alias === 'beta')).toHaveLength(1);
+    expect(containersState.aliases).toEqual(['beta']);
+    service.dispose();
+  });
+
+  it('scans subscribed containers initially but not periodically when all-host refresh is disabled', async () => {
     const service = createService(['alpha']);
     await service.initialize();
     expect(containersState.aliases).toEqual(['alpha']);
@@ -305,7 +357,7 @@ describe('Dev Container scan orchestration', () => {
     expect(service.getRecord('beta')?.subscribed).toBe(false);
     containersState.aliases.length = 0;
     await (service as unknown as { runAutomaticScan: () => Promise<void> }).runAutomaticScan();
-    expect(containersState.aliases).toEqual(['alpha']);
+    expect(containersState.aliases).toEqual([]);
     service.dispose();
   });
 

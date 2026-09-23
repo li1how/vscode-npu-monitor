@@ -40,7 +40,13 @@ const record: HostRecord = {
     ] } },
 };
 const service = { getRecords: () => [record], getRecord: (alias: string) => alias === record.host.alias ? record : undefined,
-  scanAliases: vi.fn(async () => {}) };
+  scanAliases: vi.fn(async () => {}),
+  getIdleHistory: (alias: string) => ({ alias, retentionDays: 7, cards: [] }),
+  getIdleCandidates: () => [{ alias: record.host.alias, durationMs: 60000, idleDevices: 1,
+    deviceCount: 1, deviceId: '0', observedAt: record.snapshot!.collectedAt,
+    collectedAt: record.snapshot!.collectedAt, ageSeconds: 0, maxAgeSeconds: 360,
+    validUntil: record.snapshot!.collectedAt + 360000, outdated: false as const }],
+};
 const servers: MonitorHttpServer[] = [];
 const clients: Client[] = [];
 async function freePort() {
@@ -82,8 +88,25 @@ describe('MCP snapshots', () => {
     expect(hostState(record, getSettings(), true).containers.count).toBe(0);
     expect(service.scanAliases).not.toHaveBeenCalled();
   });
+  it('reports separate NPU expiry and container observation age without a container TTL', () => {
+    const settings = getSettings();
+    const collectedAt = record.snapshot!.collectedAt;
+    const atBoundary = hostState(record, settings, false, collectedAt + 360000);
+    expect(atBoundary.npu).toMatchObject({ maxAgeSeconds: 360, validUntil: collectedAt + 360000,
+      outdated: false });
+    const expired = hostState(record, settings, false, collectedAt + 360001);
+    expect(expired.npu).toMatchObject({ outdated: true, idle: null });
+    expect(expired.containers).toMatchObject({ maxAgeSeconds: null, validUntil: null,
+      outdated: null, stale: false });
+    expect(expired.containers.ageSeconds).toBeGreaterThan(300);
+    const failed = hostState({ ...record, devContainers: { ...record.devContainers!,
+      state: 'timeout', stale: true } }, settings, false, collectedAt + 360001);
+    expect(failed.containers).toMatchObject({ stale: true, outdated: null });
+    expect(hostState({ ...record, devContainers: undefined }, settings, false, collectedAt).containers)
+      .toMatchObject({ collectedAt: null, ageSeconds: null, validUntil: null, outdated: null });
+  });
   it('does not infer idle from expired, partial or failed data', () => {
-    expect(hostState(record, getSettings(), false, Date.now() + 121000).npu.idle).toBeNull();
+    expect(hostState(record, getSettings(), false, record.snapshot!.collectedAt + 360001).npu.idle).toBeNull();
     for (const patch of [{ stale: true }, { state: 'error' as const }, { snapshot: undefined }]) {
       expect(hostState({ ...record, ...patch }, getSettings(), false).npu.idle).toBeNull();
     }
@@ -95,14 +118,27 @@ describe('HTTP MCP', () => {
   it('initializes two clients and queries caches without SSH; refreshes deduplicated aliases', async () => {
     const { url } = await setup();
     const [a, b] = await Promise.all([connect(url), connect(url)]);
-    expect((await a.listTools()).tools.map(t => t.name)).toEqual(['list_hosts', 'get_host_state', 'refresh_hosts']);
+    expect((await a.listTools()).tools.map(t => t.name)).toEqual(['list_hosts', 'get_host_state', 'get_idle_history', 'rank_idle_hosts', 'refresh_hosts']);
     const results = await Promise.all([a.callTool({ name: 'list_hosts' }), b.callTool({ name: 'get_host_state', arguments: { host: record.host.alias } })]);
     expect(results.every(r => !r.isError)).toBe(true);
+    expect(results[0]?.structuredContent).toMatchObject({ hosts: [{ npu: { maxAgeSeconds: 360 },
+      containers: { validUntil: null, outdated: null } }] });
+    expect(results[1]?.structuredContent).toMatchObject({ npu: { maxAgeSeconds: 360 },
+      containers: { validUntil: null, outdated: null } });
     expect(service.scanAliases).not.toHaveBeenCalled();
     expect((await a.callTool({ name: 'refresh_hosts', arguments: { hosts: ['missing'] } })).isError).toBe(true);
     expect((await a.callTool({ name: 'refresh_hosts', arguments: { hosts: [] } })).isError).toBe(true);
     expect(service.scanAliases).not.toHaveBeenCalled();
-    await a.callTool({ name: 'refresh_hosts', arguments: { hosts: [record.host.alias, record.host.alias] } });
+    const rank = await a.callTool({ name: 'rank_idle_hosts' });
+    expect(rank.structuredContent).toMatchObject({ candidates: [{ alias: record.host.alias,
+      deviceId: '0', maxAgeSeconds: 360, validUntil: record.snapshot!.collectedAt + 360000,
+      outdated: false }] });
+    const history = await b.callTool({ name: 'get_idle_history', arguments: { host: record.host.alias } });
+    expect(history.structuredContent).toMatchObject({ history: { alias: record.host.alias, cards: [] } });
+    expect(service.scanAliases).not.toHaveBeenCalled();
+    const refreshed = await a.callTool({ name: 'refresh_hosts', arguments: { hosts: [record.host.alias, record.host.alias] } });
+    expect(refreshed.structuredContent).toMatchObject({ hosts: [{ npu: { maxAgeSeconds: 360 },
+      containers: { validUntil: null, outdated: null } }] });
     expect(service.scanAliases).toHaveBeenCalledExactlyOnceWith([record.host.alias]);
   });
   it('rejects unauthorized, foreign origin/host, invalid paths and malformed requests', async () => {

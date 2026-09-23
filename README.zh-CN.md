@@ -8,8 +8,9 @@
 ## 功能
 
 - 从 OpenSSH config 自动加载机器。
-- 手动扫描全部、单台或多选机器。
-- 订阅机器空闲提醒，并按可配置周期自动扫描已订阅机器。
+- 默认自动刷新全部机器的 NPU 状态，也可手动扫描全部、单台或多选机器。
+- 记录逐卡空闲历史，并按已观测的连续空闲时长选择机器。
+- 订阅机器空闲提醒；启动首轮和手动扫描会刷新容器。
 - 优先读取 NPU-Exporter `/metrics`，不可用时快速回退到 `npu-smi info`。
 - 按物理 NPU 展示健康状态、利用率、HBM、温度、功耗和进程。
 - 监控 Docker 容器，支持按 Dev Container 和工作区目录筛选。
@@ -17,7 +18,8 @@
 - 在新窗口打开运行中的容器，快速复制容器信息。
 - 区分连接超时、认证失败、主机密钥异常和采集失败。
 
-自动扫描只访问已订阅机器。手动扫描不会修改订阅列表。
+默认首轮扫描全部机器的 NPU 和容器；定时只刷新 NPU，已订阅机器可接收空闲提醒。
+手动扫描同时刷新两类数据，不修改订阅列表。
 
 ![使用演示](media/demo.gif)
 
@@ -71,17 +73,20 @@ git push origin v0.2.2
 ## 使用
 
 1. 打开 Activity Bar 中的 **NPU Monitor**。
-2. 首次进入时扩展只加载 SSH config，不自动扫描全部机器。
+2. 首次进入时扩展加载 SSH config 并扫描全部机器的 NPU 和容器状态。
 3. 点击标题栏刷新图标扫描全部机器。
 4. 使用机器行的刷新图标扫描单台；多选机器后执行“扫描所选机器”。
 5. 使用机器行的终端图标打开 SSH 终端；右键机器可复制连接信息，并支持多选机器。
-6. 点击铃铛订阅机器；订阅后立即扫描，并仅对订阅机器定时轮询。
-7. 机器达到空闲条件时显示 VS Code 通知。
+6. 点击铃铛订阅机器；订阅后立即扫描，定时 NPU 扫描可在空闲时提醒。
+7. 点击标题栏“选择空闲机器”，查看按已观测连续空闲时长排序的候选；选中后
+   定位并展开机器。点击机器行铃铛旁的历史图标，查看逐卡时间线。
 8. 展开机器查看 NPU 和容器状态；点击运行中容器的新窗口图标，在独立窗口附加容器。
 9. 容器行的复制图标用于“复制精简信息”，右键菜单提供“复制完整信息”，均支持多选。
 
-扫描先采集 NPU 数据，再执行只读 Docker 查询。默认展示 Dev Container，并优先使用
-配置中的项目名称。采集失败时保留上次成功的数据并标记“数据已过期”。
+启动首轮和手动扫描先采集 NPU 数据，再执行只读 Docker 查询。默认展示 Dev Container，并优先使用
+配置中的项目名称。采集失败时保留上次成功的数据并标记“数据已过期”。空闲历史从此版本开始在
+当前扩展运行环境的本地保存；采集失败、数据不完整或观测超时不会延长连续空闲时长。
+修改逐卡空闲阈值或进程规则后，将按新规则重新积累历史。
 
 打开容器时，Remote - SSH 需使用与 NPU Monitor 一致的 SSH 配置和主机别名。
 
@@ -93,7 +98,11 @@ git push origin v0.2.2
 
 选择“复制 MCP 环境变量”获取地址和 token。在客户端中选择 Streamable HTTP，
 使用 `NPU_MONITOR_MCP_URL` 作为地址，将 `NPU_MONITOR_MCP_TOKEN` 配置为
-`Authorization: Bearer <token>` 请求头。复制内容含凭据；缓存中的空闲状态不代表设备已被预约。
+`Authorization: Bearer <token>` 请求头。复制内容含凭据；缓存中的空闲状态不代表设备已被预约。`rank_idle_hosts` 和 `get_idle_history`
+只读取本地观测历史，不发起 SSH 查询。MCP 的 NPU 数据及候选结果包含 `collectedAt`、
+`ageSeconds`、`maxAgeSeconds`、`validUntil`、`outdated`；有效期为轮询周期的两倍
+（默认 360 秒）。容器单独返回 `collectedAt` 和 `ageSeconds`，其 `maxAgeSeconds`、
+`validUntil`、`outdated` 均为 `null`，采集失败时查看 `stale`。
 
 ## 配置
 
@@ -116,8 +125,10 @@ git push origin v0.2.2
 | `containers.filterMode` | `devContainers` | `all` 全部容器、`devContainers` 或 `workspacePaths` 工作区筛选 |
 | `containers.workspacePaths` | `[]` | 宿主机工作区目录，仅在 `workspacePaths` 模式生效 |
 | `containers.workspaceFile` | 空 | 用于替代容器工作目录打开的 Workspace 文件名 |
-| `pollIntervalSeconds` | `60` | 订阅轮询周期，最小 10 秒 |
-| `idleScope` | `allCards` | 要求全部卡或任一卡空闲 |
+| `pollIntervalSeconds` | `180` | NPU 自动轮询周期，最小 10 秒 |
+| `autoRefreshAllHosts` | `true` | 启动首轮扫描全部机器的 NPU 和容器，之后仅定时扫描 NPU；关闭后只扫描已订阅机器 |
+| `idleHistoryRetentionDays` | `7` | 逐卡历史在本地保留的天数，范围 1–30 |
+| `idleScope` | `anyCard` | 要求全部卡或任一卡空闲 |
 | `idleRequireNoProcesses` | `true` | 空闲时要求没有 NPU 进程 |
 | `idleUtilizationThresholdPercent` | `1` | 空闲利用率上限 |
 | `idleConsecutiveChecks` | `1` | 空闲提醒前连续满足次数 |

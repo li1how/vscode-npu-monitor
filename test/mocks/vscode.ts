@@ -66,6 +66,7 @@ export class MarkdownString {
 export const clipboardWrites: string[] = [];
 export const clipboardFailures: unknown[] = [];
 export const env = {
+  language: 'en',
   remoteName: 'wsl',
   clipboard: {
     async writeText(value: string): Promise<void> {

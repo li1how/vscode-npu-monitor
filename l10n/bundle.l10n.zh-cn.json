@@ -89,5 +89,21 @@
   "Open a workspace to enable MCP.": "请打开工作区后启用 MCP。",
   "Start MCP before copying connection settings.": "请先启动 MCP 再复制连接配置。",
   "Copied MCP credentials. Paste into your private .env file.": "已复制 MCP 凭据，请粘贴到私有 .env 文件。",
-  "Unable to update or copy MCP settings.": "无法更新或复制 MCP 配置。"
+  "Unable to update or copy MCP settings.": "无法更新或复制 MCP 配置。",
+  "{0} min": "{0} 分钟",
+  "{0} h {1} min": "{0} 小时 {1} 分钟",
+  "{0} d {1} h": "{0} 天 {1} 小时",
+  "Mixed": "混合",
+  "Unknown": "未知",
+  "Idle for {0}": "已空闲 {0}",
+  "Longest idle: {0}": "最长空闲：{0}",
+  "{0}/{1} idle NPUs": "{0}/{1} 张 NPU 空闲",
+  "Idle history: {0}": "空闲历史：{0}",
+  "No observations": "暂无观测记录",
+  "Observed history only; idle is not a reservation.": "仅展示已观测到的历史；空闲不代表设备已被预约。",
+  "No recently observed idle NPU hosts.": "当前没有近期观测为空闲的 NPU 机器。",
+  "Idle for {0} · {1}/{2} NPUs": "已空闲 {0} · {1}/{2} 张 NPU",
+  "Choose an idle NPU host": "选择空闲 NPU 机器",
+  "All NPUs": "全部 NPU",
+  "Choose a host for idle history": "选择要查看空闲历史的机器"
 }

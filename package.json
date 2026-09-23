@@ -76,6 +76,16 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "npuMonitor.chooseIdleHost",
+        "title": "%command.chooseIdleHost%",
+        "icon": "$(list-ordered)"
+      },
+      {
+        "command": "npuMonitor.showIdleHistory",
+        "title": "%command.showIdleHistory%",
+        "icon": "$(history)"
+      },
+      {
         "command": "npuMonitor.subscribeHost",
         "title": "%command.subscribe%",
         "icon": "$(bell)"
@@ -145,12 +155,12 @@
         {
           "command": "npuMonitor.reloadConfig",
           "when": "view == npuMonitor.hosts",
-          "group": "navigation@2"
+          "group": "navigation@3"
         },
         {
           "command": "npuMonitor.openSettings",
           "when": "view == npuMonitor.hosts",
-          "group": "navigation@3"
+          "group": "2_actions@4"
         },
         {
           "command": "npuMonitor.scanSelected",
@@ -166,6 +176,11 @@
           "command": "npuMonitor.showOutput",
           "when": "view == npuMonitor.hosts",
           "group": "2_actions@3"
+        },
+        {
+          "command": "npuMonitor.chooseIdleHost",
+          "when": "view == npuMonitor.hosts",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -187,7 +202,7 @@
         {
           "command": "npuMonitor.openSshTerminal",
           "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
-          "group": "inline@3"
+          "group": "inline@4"
         },
         {
           "command": "npuMonitor.scanSelected",
@@ -218,6 +233,11 @@
           "command": "npuMonitor.copyContainerInfo",
           "when": "view == npuMonitor.hosts && viewItem =~ /^npuDevContainer/",
           "group": "3_copy@1"
+        },
+        {
+          "command": "npuMonitor.showIdleHistory",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
+          "group": "inline@3"
         }
       ],
       "commandPalette": [
@@ -295,7 +315,7 @@
         },
         "npuMonitor.pollIntervalSeconds": {
           "type": "number",
-          "default": 60,
+          "default": 180,
           "minimum": 10,
           "maximum": 86400,
           "scope": "window",
@@ -311,7 +331,7 @@
             "%configuration.idleScope.allCards%",
             "%configuration.idleScope.anyCard%"
           ],
-          "default": "allCards",
+          "default": "anyCard",
           "scope": "window",
           "description": "%configuration.idleScope%"
         },
@@ -397,6 +417,20 @@
           "maximum": 65535,
           "scope": "window",
           "description": "%configuration.mcp.port%"
+        },
+        "npuMonitor.autoRefreshAllHosts": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "description": "%configuration.autoRefreshAllHosts%"
+        },
+        "npuMonitor.idleHistoryRetentionDays": {
+          "type": "integer",
+          "default": 7,
+          "minimum": 1,
+          "maximum": 30,
+          "scope": "window",
+          "description": "%configuration.idleHistoryRetentionDays%"
         }
       }
     }
