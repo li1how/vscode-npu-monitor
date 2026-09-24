@@ -16,7 +16,7 @@ const WORKSPACE_FILE = '__NPU_MONITOR_WORKSPACE_FILE__';
 
 // Only selected fields leave the host; never serialize Config.Env or all labels.
 const INSPECT_FORMAT = '{"id":{{json .Id}},"name":{{json .Name}},' +
-  '"image":{{json .Config.Image}},"state":{{json .State.Status}},' +
+  '"image":{{json .Config.Image}},"imageId":{{json .Image}},"state":{{json .State.Status}},' +
   '"createdAt":{{json .Created}},"startedAt":{{json .State.StartedAt}},' +
   '"workspaceFolder":{{json (index .Config.Labels "devcontainer.local_folder")}},' +
   '"legacyFolder":{{json (index .Config.Labels "vsch.local.folder")}},' +
@@ -214,6 +214,8 @@ export function parseDevContainerOutput(stdout: string, workspaceFileName = ''):
       name: (value.name as string).replace(/^\//, ''),
       displayName: optionalString(value.configuredName)?.trim() || undefined,
       image: value.image as string,
+      imageId: typeof value.imageId === 'string' && /^sha256:[a-f0-9]{64}$/.test(value.imageId)
+        ? value.imageId : undefined,
       state: value.state as string,
       createdAt: value.createdAt as string,
       startedAt: typeof value.startedAt === 'string' && !value.startedAt.startsWith('0001-')

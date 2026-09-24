@@ -11,7 +11,7 @@ import { SshExecutionError } from '../../src/ssh/runner.js';
 
 const id = 'a'.repeat(64);
 const metadata = {
-  id, name: '/workspace', image: 'image:dev', state: 'running',
+  id, name: '/workspace', image: 'image:dev', imageId: 'sha256:' + 'c'.repeat(64), state: 'running',
   createdAt: '2026-09-13T00:00:00Z', startedAt: '2026-09-13T01:00:00Z',
   workspaceFolder: '/data/workspace', configFile: '/data/workspace/.devcontainer/devcontainer.json',
 };
@@ -27,6 +27,7 @@ describe('Dev Container collection', () => {
     expect(result.state).toBe('ready');
     expect(result.snapshot?.containers.map(x => x.name)).toEqual(['aaa', 'workspace']);
     expect(result.snapshot?.containers[0]?.startedAt).toBeUndefined();
+    expect(result.snapshot?.containers[1]?.imageId).toBe('sha256:' + 'c'.repeat(64));
   });
 
   it.each([

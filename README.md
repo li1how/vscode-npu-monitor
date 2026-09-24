@@ -127,6 +127,11 @@ NPU `collectedAt`, `ageSeconds`, `maxAgeSeconds`, `validUntil` and `outdated`
 for twice the polling interval (360 seconds by default), including in ranked candidates.
 Container `collectedAt` and `ageSeconds` are independent; `maxAgeSeconds`, `validUntil`
 and `outdated` are `null` because containers have no fixed expiry. Check `stale` after failures.
+`refresh_containers` updates only container metadata without an NPU scan. `list_host_images` runs read-only Docker
+queries for at most 20 vLLM-Ascend candidates and returns tags, image ID, creation time,
+architecture and OS. Container details include the actual image ID. Select an image before
+creating a container; a running container reports its current image. Discovery does not
+reserve the host or install software. Recheck host occupancy before execution.
 
 ## Configuration
 

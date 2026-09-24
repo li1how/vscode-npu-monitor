@@ -103,7 +103,10 @@ git push origin v0.2.3
 只读取本地观测历史，不发起 SSH 查询。MCP 的 NPU 数据及候选结果包含 `collectedAt`、
 `ageSeconds`、`maxAgeSeconds`、`validUntil`、`outdated`；有效期为轮询周期的两倍
 （默认 360 秒）。容器单独返回 `collectedAt` 和 `ageSeconds`，其 `maxAgeSeconds`、
-`validUntil`、`outdated` 均为 `null`，采集失败时查看 `stale`。
+`validUntil`、`outdated` 均为 `null`，采集失败时查看 `stale`。`refresh_containers` 仅更新容器信息，不重扫 NPU。
+`list_host_images` 只读查询最多 20 个 vLLM-Ascend 镜像候选，返回标签、镜像 ID、
+创建时间、架构和系统；容器详情也返回实际镜像 ID。新建容器前先展示候选并选择，
+复用时核对现用镜像。发现结果不预留资源，执行前仍需复核节点占用。
 
 ## 配置
 

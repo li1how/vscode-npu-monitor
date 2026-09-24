@@ -41,6 +41,8 @@ const record: HostRecord = {
 };
 const service = { getRecords: () => [record], getRecord: (alias: string) => alias === record.host.alias ? record : undefined,
   scanAliases: vi.fn(async () => {}),
+  scanContainerAliases: vi.fn(async () => {}),
+  listHostImages: vi.fn(async (host: string) => ({ host, collectedAt: Date.now(), state: 'ready', images: [] })),
   getIdleHistory: (alias: string) => ({ alias, retentionDays: 7, cards: [] }),
   getIdleCandidates: () => [{ alias: record.host.alias, durationMs: 60000, idleDevices: 1,
     deviceCount: 1, deviceId: '0', observedAt: record.snapshot!.collectedAt,
@@ -72,7 +74,8 @@ async function connect(url: string) {
 afterEach(async () => {
   await Promise.all(clients.splice(0).map(c => c.close()));
   await Promise.all(servers.splice(0).map(s => s.stop()));
-  service.scanAliases.mockClear(); resetVscodeMock();
+  service.scanAliases.mockClear(); service.scanContainerAliases.mockClear();
+  service.listHostImages.mockClear(); resetVscodeMock();
 });
 
 describe('MCP snapshots', () => {
@@ -118,7 +121,7 @@ describe('HTTP MCP', () => {
   it('initializes two clients and queries caches without SSH; refreshes deduplicated aliases', async () => {
     const { url } = await setup();
     const [a, b] = await Promise.all([connect(url), connect(url)]);
-    expect((await a.listTools()).tools.map(t => t.name)).toEqual(['list_hosts', 'get_host_state', 'get_idle_history', 'rank_idle_hosts', 'refresh_hosts']);
+    expect((await a.listTools()).tools.map(t => t.name)).toEqual(['list_hosts', 'get_host_state', 'get_idle_history', 'rank_idle_hosts', 'refresh_hosts', 'refresh_containers', 'list_host_images']);
     const results = await Promise.all([a.callTool({ name: 'list_hosts' }), b.callTool({ name: 'get_host_state', arguments: { host: record.host.alias } })]);
     expect(results.every(r => !r.isError)).toBe(true);
     expect(results[0]?.structuredContent).toMatchObject({ hosts: [{ npu: { maxAgeSeconds: 360 },
@@ -140,6 +143,13 @@ describe('HTTP MCP', () => {
     expect(refreshed.structuredContent).toMatchObject({ hosts: [{ npu: { maxAgeSeconds: 360 },
       containers: { validUntil: null, outdated: null } }] });
     expect(service.scanAliases).toHaveBeenCalledExactlyOnceWith([record.host.alias]);
+    const npuTime = record.snapshot?.collectedAt;
+    await a.callTool({ name: 'refresh_containers', arguments: { hosts: [record.host.alias, record.host.alias] } });
+    expect(service.scanContainerAliases).toHaveBeenCalledExactlyOnceWith([record.host.alias]);
+    expect(record.snapshot?.collectedAt).toBe(npuTime);
+    expect((await b.callTool({ name: 'list_host_images', arguments: { host: record.host.alias } })).structuredContent)
+      .toMatchObject({ host: record.host.alias, images: [] });
+    expect(service.listHostImages).toHaveBeenCalledExactlyOnceWith(record.host.alias);
   });
   it('rejects unauthorized, foreign origin/host, invalid paths and malformed requests', async () => {
     const { url } = await setup();

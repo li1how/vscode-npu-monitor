@@ -7,7 +7,7 @@ import { evaluateSnapshot } from '../npu/idle.js';
 import type { HostRecord, MonitorSettings } from '../types.js';
 
 export type MonitorReader = Pick<MonitorService,
-  'getRecords' | 'getRecord' | 'scanAliases' | 'getIdleHistory' | 'getIdleCandidates'>;
+  'getRecords' | 'getRecord' | 'scanAliases' | 'scanContainerAliases' | 'listHostImages' | 'getIdleHistory' | 'getIdleCandidates'>;
 
 export function hostState(record: HostRecord, settings: MonitorSettings, details: boolean, now = Date.now()) {
   const observation = (collectedAt: number | undefined, stale: boolean) => ({
@@ -53,7 +53,7 @@ export function hostState(record: HostRecord, settings: MonitorSettings, details
 
 export function createMonitorMcp(service: MonitorReader, settings: () => MonitorSettings): McpServer {
   const server = new McpServer({ name: 'npu-monitor', version: '1.0.0' }, {
-    instructions: 'Queries read cached snapshots and idle history. NPU snapshots expire after twice the poll interval; container snapshots have no fixed expiry, so check their collectedAt, ageSeconds and stale fields. rank_idle_hosts uses only fresh NPU observations; idle is not a reservation. refresh_hosts explicitly refreshes selected SSH aliases without changing subscriptions. Initialization and execution belong to external tools.',
+    instructions: 'Queries read cached snapshots and idle history. NPU snapshots expire after twice the poll interval; container snapshots have no fixed expiry, so check their collectedAt, ageSeconds and stale fields. rank_idle_hosts uses only fresh NPU observations; idle is not a reservation. refresh_hosts refreshes NPU and containers; refresh_containers refreshes only containers. list_host_images queries read-only Docker image metadata. Neither reserves resources or changes subscriptions. Initialization and execution belong to external tools.',
   });
   const result = (data: Record<string, unknown>) => ({
     content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data,
@@ -106,6 +106,31 @@ export function createMonitorMcp(service: MonitorReader, settings: () => Monitor
       const record = service.getRecord(alias);
       return record ? withHistory(record, true) : { host: alias, error: 'Host removed' };
     }) });
+  });
+  server.registerTool('refresh_containers', {
+    description: 'Refresh only Dev Container metadata for selected SSH aliases; NPU snapshots are unchanged.',
+    inputSchema: { hosts: z.array(z.string().min(1)).min(1).max(100) },
+    annotations: { ...annotations, openWorldHint: true },
+  }, async ({ hosts }) => {
+    const aliases = [...new Set(hosts)];
+    if (aliases.some(alias => !service.getRecord(alias) || service.getRecord(alias)?.state === 'missingConfig')) {
+      throw new Error('Unknown or unavailable SSH host');
+    }
+    await service.scanContainerAliases(aliases);
+    return result({ hosts: aliases.map(alias => {
+      const record = service.getRecord(alias);
+      return record ? withHistory(record, true) : { host: alias, error: 'Host removed' };
+    }) });
+  });
+  server.registerTool('list_host_images', {
+    description: 'Query at most 20 vLLM-Ascend Docker image candidates on one SSH host; read-only.',
+    inputSchema: { host: z.string().min(1) },
+    annotations: { ...annotations, openWorldHint: true },
+  }, async ({ host }) => {
+    if (!service.getRecord(host) || service.getRecord(host)?.state === 'missingConfig') {
+      throw new Error('Unknown or unavailable SSH host');
+    }
+    return result(await service.listHostImages(host));
   });
   return server;
 }

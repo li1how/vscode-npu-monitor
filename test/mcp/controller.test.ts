@@ -9,7 +9,7 @@ import { clipboardFailures, clipboardWrites, configurationValues, errorMessages,
 
 const http = vi.hoisted(() => ({ start: vi.fn(async () => {}), stop: vi.fn(async () => {}) }));
 vi.mock('../../src/mcp/server.js', () => ({ MonitorHttpServer: class { start = http.start; stop = http.stop; } }));
-const service = { getRecords: () => [], getRecord: () => undefined, scanAliases: vi.fn(async () => {}), getIdleHistory: (alias: string) => ({ alias, retentionDays: 7, cards: [] }), getIdleCandidates: () => [], onDidChange: new EventEmitter<void>().event };
+const service = { getRecords: () => [], getRecord: () => undefined, scanAliases: vi.fn(async () => {}), scanContainerAliases: vi.fn(async () => {}), listHostImages: vi.fn(async () => ({ host: "", collectedAt: 0, state: 'ready', images: [] })), getIdleHistory: (alias: string) => ({ alias, retentionDays: 7, cards: [] }), getIdleCandidates: () => [], onDidChange: new EventEmitter<void>().event };
 const secrets = new Map<string, string>();
 function controller() {
   return new McpController({ secrets: { get: async (k: string) => secrets.get(k), store: async (k: string, v: string) => { secrets.set(k, v); } } } as unknown as vscode.ExtensionContext,

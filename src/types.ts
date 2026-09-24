@@ -71,6 +71,7 @@ export interface HostRecord {
 
 export interface DevContainer {
   id: string;
+  imageId?: string;
   isDevContainer: boolean;
   name: string;
   displayName?: string;

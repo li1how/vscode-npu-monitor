@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { DevContainerCollector } from './containers/collector.js';
+import { ImageCollector } from './containers/images.js';
 import { NpuCollector } from './npu/collector.js';
 import { evaluateSnapshot } from './npu/idle.js';
 import { IdleHistoryStore, type HostHistoryView, type IdleCandidate } from './npu/history.js';
@@ -25,6 +26,7 @@ export class MonitorService implements vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   private collector?: NpuCollector;
   private devContainerCollector?: DevContainerCollector;
+  private imageCollector?: ImageCollector;
   private pollTimer?: NodeJS.Timeout;
   private automaticScanRunning = false;
   private subscriptions = new Set<string>();
@@ -101,6 +103,7 @@ export class MonitorService implements vscode.Disposable {
         executablePath: loaded.sshExecutablePath,
         connectTimeoutSeconds: settings.connectTimeoutSeconds,
       });
+      this.imageCollector = new ImageCollector(runner);
       this.devContainerCollector = settings.devContainersEnabled
         ? new DevContainerCollector(runner, settings) : undefined;
       this.collector = new NpuCollector(
@@ -150,6 +153,32 @@ export class MonitorService implements vscode.Disposable {
         record !== undefined && record.state !== 'missingConfig',
       );
     await this.scanRecords(records, token, onProgress);
+  }
+
+  public async scanContainerAliases(aliases: string[]): Promise<void> {
+    await this.reloadConfig();
+    const records = [...new Set(aliases)].map(alias => this.records.get(alias));
+    if (!getSettings().devContainersEnabled) throw new Error('Dev Container collection is disabled');
+    if (records.some(record => !record || record.state === 'missingConfig')) {
+      throw new Error('Unknown or unavailable SSH host');
+    }
+    let cursor = 0;
+    const workers = Math.min(getSettings().maxConcurrentHosts, records.length);
+    await Promise.all(Array.from({ length: workers }, async () => {
+      while (cursor < records.length) {
+        const record = records[cursor++];
+        if (record) await this.scanContainers(record);
+      }
+    }));
+  }
+
+  public async listHostImages(alias: string) {
+    await this.reloadConfig();
+    const record = this.records.get(alias);
+    if (!record || record.state === 'missingConfig' || !this.imageCollector) {
+      throw new Error('Unknown or unavailable SSH host');
+    }
+    return this.imageCollector.list(record.host);
   }
 
   public async subscribe(alias: string): Promise<void> {
