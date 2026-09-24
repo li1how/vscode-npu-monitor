@@ -77,8 +77,11 @@ function validStore(value: unknown): value is StoredHistory {
 }
 
 function combine(previous: HistoryState, next: HistoryState): HistoryState {
-  if (previous === 'unknown' || next === 'unknown') return 'unknown';
   if (previous === next) return previous;
+  if (previous === 'mixed' || next === 'mixed') return 'mixed';
+  if (previous === 'busy' && next === 'unknown' ||
+    previous === 'unknown' && next === 'busy') return 'busy';
+  if (previous === 'unknown' || next === 'unknown') return 'unknown';
   return 'mixed';
 }
 
@@ -121,14 +124,15 @@ export class IdleHistoryStore {
       this.data.hosts[host.alias] = entry;
     }
     const usable = snapshot && !snapshot.partial && snapshot.devices.length > 0;
-    const devices = new Map(usable ? snapshot.devices.map(device => [device.id, device]) : []);
+    const devices = new Map(snapshot?.devices.map(device => [device.id, device]) ?? []);
     const ids = new Set([...Object.keys(entry.cards), ...devices.keys()]);
     for (const id of ids) {
       const device = devices.get(id);
-      const next: StoredCard['state'] = device?.health === 'OK' &&
+      const hasProcesses = (device?.processCount ?? 0) > 0 || (device?.processes.length ?? 0) > 0;
+      const next: StoredCard['state'] = usable && device?.health === 'OK' &&
         device.utilizationPercent !== undefined
         ? isDeviceIdle(device, settings) ? 'idle' : 'busy'
-        : 'unknown';
+        : hasProcesses ? 'busy' : 'unknown';
       let card = entry.cards[id];
       if (!card) {
         card = { state: 'unknown', observedAt: now, idleSince: null, bins: [] };

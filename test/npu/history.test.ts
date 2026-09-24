@@ -82,6 +82,42 @@ describe('per-NPU idle history', () => {
     expect(history.getCandidates([record(snapshot(start + 6 * 60000, [device('0')]))], settings, start + 9 * 60000)).toEqual([]);
   });
 
+  it('records process-backed faults as busy, including partial scans, without extending idle', () => {
+    const settings = getSettings();
+    settings.pollIntervalSeconds = 900;
+    const history = new IdleHistoryStore(memory());
+    const faulty = { ...device('0'), health: 'ERROR' as const, processCount: 1,
+      processes: [{ pid: '42' }] };
+    history.observe(host, snapshot(start, [device('0')]), settings);
+
+    const faultTime = start + HISTORY_BUCKET_MS;
+    history.observe(host, snapshot(faultTime, [{ ...faulty, processes: [] }]), settings);
+    expect(history.getHistory(host.alias, settings, faultTime).cards[0]).toMatchObject({
+      state: 'busy', idleSince: null, bins: [[start, 'idle'], [faultTime, 'busy']],
+    });
+    expect(history.getCandidates([record(snapshot(faultTime, [faulty]))], settings, faultTime))
+      .toEqual([]);
+
+    const partialTime = faultTime + HISTORY_BUCKET_MS;
+    history.observe(host, snapshot(partialTime, [
+      { ...faulty, utilizationPercent: undefined },
+    ], true), settings);
+    expect(history.getHistory(host.alias, settings, partialTime).cards[0]?.state).toBe('busy');
+
+    const unknownTime = partialTime + HISTORY_BUCKET_MS;
+    history.observe(host, snapshot(unknownTime, [
+      { ...faulty, processCount: 0, processes: [] },
+    ], true), settings);
+    expect(history.getHistory(host.alias, settings, unknownTime).cards[0]?.state).toBe('unknown');
+    history.observe(host, snapshot(unknownTime + 60000, [
+      { ...faulty, processCount: 0 },
+    ], true), settings);
+    const card = history.getHistory(host.alias, settings, unknownTime + 60000).cards[0];
+    expect(card?.state).toBe('busy');
+    expect(card?.idleSince).toBeNull();
+    expect(card?.bins).toContainEqual([unknownTime, 'busy']);
+  });
+
   it('prunes retained bins, rejects reused aliases, and resets history when idle rules change', async () => {
     const settings = getSettings();
     settings.idleHistoryRetentionDays = 1;

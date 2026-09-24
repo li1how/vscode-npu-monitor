@@ -75,7 +75,7 @@ section{overflow-x:auto}.row{display:flex;align-items:center;margin:3px 0}.name{
 .cells{display:grid;grid-template-columns:repeat(96,minmax(7px,1fr));gap:1px;min-width:720px;flex:1}
 .cell{display:inline-block;height:17px;border-radius:2px;background:var(--vscode-editorWidget-border)}
 .cell.idle{background:var(--vscode-testing-iconPassed)}.cell.busy{background:var(--vscode-charts-yellow)}
-.cell.mixed{background:var(--vscode-charts-orange)}.cell.unknown{background:var(--vscode-editorWidget-border)}
+.cell.mixed{background:repeating-linear-gradient(135deg,var(--vscode-testing-iconPassed) 0 4px,var(--vscode-charts-yellow) 4px 8px)}.cell.unknown{background:var(--vscode-editorWidget-border)}
 </style></head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(vscode.l10n.t('Observed history only; idle is not a reservation.'))}</p>
 <ul>${summary}</ul><div class="legend">${legend}</div>${days.join('')}</body></html>`;
 }
