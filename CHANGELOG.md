@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.4
+
+- Add the `refresh_containers` MCP tool to update container metadata without an NPU scan, and the read-only `list_host_images` tool to discover up to 20 vLLM-Ascend candidate images with tags, image ID, creation time, architecture and OS. Container details now include the actual image ID.
+- Record NPUs with running processes as busy in idle history even when the snapshot is partial or health data is missing, keep busy and mixed bins from collapsing to unknown, and draw mixed history cells as idle/busy stripes.
+- Update @modelcontextprotocol/sdk to 1.31.0, js-yaml to 4.3.2, linkify-it to 5.0.2, brace-expansion to 5.0.12, source-map-js to 1.2.2 and fast-uri to 3.1.8.
+
 ## 0.2.3
 
 - Update ESLint and typescript-eslint within their existing major versions.
