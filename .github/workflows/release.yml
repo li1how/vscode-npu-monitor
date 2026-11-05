@@ -70,16 +70,28 @@ jobs:
       - name: Build VSIX
         run: npm run vsix
 
+      - name: Generate release notes
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: >
+          node scripts/generate-release-notes.mjs
+          --version ${{ steps.release.outputs.version }}
+          --output release/RELEASE_NOTES.md
+
       - name: Verify release asset
         env:
           RELEASE_ASSET: ${{ steps.release.outputs.asset }}
-        run: test -f "$RELEASE_ASSET"
+        run: |
+          test -f "$RELEASE_ASSET"
+          test -f release/RELEASE_NOTES.md
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
         with:
           name: vscode-npu-monitor-vsix
-          path: ${{ steps.release.outputs.asset }}
+          path: |
+            ${{ steps.release.outputs.asset }}
+            release/RELEASE_NOTES.md
           if-no-files-found: error
 
   publish:
@@ -100,6 +112,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ASSET: release/${{ needs.build.outputs.asset-name }}
+          RELEASE_NOTES: release/RELEASE_NOTES.md
           RELEASE_TAG: ${{ github.ref_name }}
         shell: bash
         run: |
@@ -109,7 +122,7 @@ jobs:
               --repo "$GITHUB_REPOSITORY"
           else
             gh release create "$RELEASE_TAG" "$RELEASE_ASSET" \
-              --generate-notes \
+              --notes-file "$RELEASE_NOTES" \
               --title "$RELEASE_TAG" \
               --verify-tag \
               --repo "$GITHUB_REPOSITORY"
