@@ -142,7 +142,7 @@ Search for `NPU Monitor` in VS Code settings:
 | `mcp.enabled` | `false` | Enable MCP in this workspace |
 | `mcp.port` | `49160` | Loopback MCP port |
 | `sshConfigPath` | Remote - SSH config or auto-detected | Explicit NPU Monitor paths have highest priority; when empty, `remote.SSH.configFile` is used before Windows / WSL auto-detection |
-| `knownHostsPath` | Next to SSH config | Host key file |
+| `knownHostsPath` | SSH config directory and extension user's `~/.ssh` | Read existing `known_hosts` files together; explicit paths take precedence |
 | `sshExecutablePath` | Auto-detected | Windows OpenSSH or `/usr/bin/ssh` |
 | `connectTimeoutSeconds` | `8` | SSH connection timeout |
 | `exporterProbeTimeoutSeconds` | `2` | Total Exporter probe timeout |

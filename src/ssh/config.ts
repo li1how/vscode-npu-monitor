@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -201,6 +201,31 @@ function stringValue(values: Map<string, string | string[]>, key: string): strin
   return typeof value === 'string' ? value : undefined;
 }
 
+function detectKnownHostsPath(configPath: string, environment: SshEnvironment): string | undefined {
+  const paths = environment.platform === 'win32' ? path.win32 : path.posix;
+  const candidates = [
+    paths.join(paths.dirname(configPath), 'known_hosts'),
+    paths.join(environment.homeDir, '.ssh', 'known_hosts'),
+  ];
+  const seen = new Set<string>();
+  const files = candidates.filter(candidate => {
+    const key = environment.platform === 'win32' ? candidate.toLowerCase() : candidate;
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    try {
+      return statSync(candidate).isFile();
+    } catch {
+      return false;
+    }
+  });
+  // OpenSSH parses this option itself, even when spawn uses shell: false.
+  return files.length > 0
+    ? files.map(file => '"' + file.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"').join(' ')
+    : undefined;
+}
+
 export function loadSshHosts(
   settings: MonitorSettings,
   environment: SshEnvironment,
@@ -224,12 +249,9 @@ export function loadSshHosts(
     warnings.push('Match sections are ignored by NPU Monitor.');
   }
 
-  const configuredKnownHosts = settings.knownHostsPath
+  const knownHostsPath = settings.knownHostsPath
     ? resolveConfiguredPath(settings.knownHostsPath, environment)
-    : path.join(path.dirname(configPath), 'known_hosts');
-  const knownHostsPath = settings.knownHostsPath || existsSync(configuredKnownHosts)
-    ? configuredKnownHosts
-    : undefined;
+    : detectKnownHostsPath(configPath, environment);
   const sshExecutablePath = detectSshExecutablePath(settings.sshExecutablePath, environment);
 
   const hosts: SshHost[] = [];

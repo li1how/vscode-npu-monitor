@@ -117,7 +117,7 @@ git push origin v0.2.4
 | `mcp.enabled` | `false` | 启用当前工作区 MCP 服务 |
 | `mcp.port` | `49160` | MCP 回环监听端口 |
 | `sshConfigPath` | Remote - SSH 配置或自动检测 | 显式配置的 NPU Monitor 路径优先级最高；留空时先使用 `remote.SSH.configFile`，再按 Windows / WSL 规则自动检测 |
-| `knownHostsPath` | SSH config 同目录 | 主机密钥文件 |
+| `knownHostsPath` | SSH config 同目录及插件用户 `~/.ssh` | 联合读取现存 `known_hosts`；显式配置优先 |
 | `sshExecutablePath` | 自动检测 | Windows OpenSSH 或 `/usr/bin/ssh` |
 | `connectTimeoutSeconds` | `8` | SSH 连接超时 |
 | `exporterProbeTimeoutSeconds` | `2` | Exporter 总探测时间 |
