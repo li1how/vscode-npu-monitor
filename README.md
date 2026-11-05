@@ -57,10 +57,17 @@ code .
 
 ## Release
 
-Pushing a `vX.Y.Z` tag that matches the version in `package.json` runs the full
-test suite, builds the VSIX, and creates a GitHub Release with automatically
-generated release notes. The tag must point to a commit on `main`, and only
-stable three-part semantic versions are supported.
+Pushing a `vX.Y.Z` tag that matches `package.json` automatically runs checks,
+builds the VSIX, and publishes a GitHub Release.
+[github/copilot-release-notes](https://github.com/github/copilot-release-notes)
+generates notes from merged PRs, following a [short style guide](.github/release-notes-instructions.md)
+with fixed historical examples. The tag must point to a commit on `main`;
+only stable three-part versions are supported. Use merge or squash merges and
+preserve PR numbers in commit titles.
+
+Actions uses its built-in `GITHUB_TOKEN` and requires available Copilot access and
+quota. `RELEASE_NOTES_MODEL` optionally selects a model; otherwise Copilot uses
+its default. If note generation fails, publication stops.
 
 To prepare a new version, update `package.json`, `package-lock.json`, and
 `CHANGELOG.md`:

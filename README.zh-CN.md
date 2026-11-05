@@ -52,9 +52,14 @@ code .
 
 ## 发布
 
-推送与 `package.json` 版本一致的 `vX.Y.Z` 标签后，GitHub Actions 会运行完整
-检查、生成 VSIX，并创建包含自动 Release Notes 的 GitHub Release。标签必须指向
-`main` 上的提交，并且仅支持稳定的三段式语义版本。
+推送与 `package.json` 版本一致的 `vX.Y.Z` 标签后，GitHub Actions 会自动运行检查、
+打包 VSIX，并通过 [github/copilot-release-notes](https://github.com/github/copilot-release-notes)
+根据已合入 PR 生成 Release Notes，遵循包含固定历史样例的[简短写作规范](.github/release-notes-instructions.md)，
+然后发布 GitHub Release。标签必须指向 `main` 上的提交，仅支持稳定的三段式版本。
+PR 请使用 merge 或 squash 合入，并在提交标题中保留 PR 编号。
+
+工作流使用 Actions 自带的 `GITHUB_TOKEN`，需要可用的 Copilot 权限和额度。
+仓库变量 `RELEASE_NOTES_MODEL` 可选，未设置时使用 Copilot 默认模型；说明生成失败时停止发布。
 
 准备新版本时更新 `package.json`、`package-lock.json` 和 `CHANGELOG.md`：
 
