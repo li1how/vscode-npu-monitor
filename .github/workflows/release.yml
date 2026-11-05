@@ -70,9 +70,12 @@ jobs:
       - name: Build VSIX
         run: npm run vsix
 
-      - name: Generate release notes
+      - name: Generate release notes with LLM
         env:
           GITHUB_REPOSITORY: ${{ github.repository }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL }}
+          RELEASE_NOTES_MODEL: ${{ vars.RELEASE_NOTES_MODEL }}
         run: >
           node scripts/generate-release-notes.mjs
           --version ${{ steps.release.outputs.version }}
