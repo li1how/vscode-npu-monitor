@@ -2,7 +2,10 @@
 
 ## Unreleased
 
+## 0.2.5
+
 - Read existing `known_hosts` files beside the SSH configuration and in the extension user's home together, so WSL can use its trusted host keys with a Windows SSH configuration. Preserve explicit path overrides and strict host key verification.
+- Update @modelcontextprotocol/sdk to 1.32.0, vitest to 4.1.12, zod to 4.6.7, vite to 8.3.4, hono to 4.13.13, @hono/node-server to 2.1.6, markdown-it to 14.3.3, fast-uri to 3.1.9, undici to 7.30.1, body-parser to 2.4.0, ip-address to 10.7.5, and @azure/msal-node / @azure/identity.
 
 ## 0.2.4
 
