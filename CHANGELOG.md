@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read existing `known_hosts` files beside the SSH configuration and in the extension user's home together, so WSL can use its trusted host keys with a Windows SSH configuration. Preserve explicit path overrides and strict host key verification.
+
 ## 0.2.4
 
 - Add the `refresh_containers` MCP tool to update container metadata without an NPU scan, and the read-only `list_host_images` tool to discover up to 20 vLLM-Ascend candidate images with tags, image ID, creation time, architecture and OS. Container details now include the actual image ID.

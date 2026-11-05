@@ -15,7 +15,7 @@
   "command.showOutput": "NPU Monitor: Show Output",
   "configuration.title": "NPU Monitor",
   "configuration.sshConfigPath": "SSH configuration path. Leave empty to use remote.SSH.configFile first, then detect it automatically.",
-  "configuration.knownHostsPath": "known_hosts path. Leave empty to use the file beside the SSH configuration.",
+  "configuration.knownHostsPath": "known_hosts path override. Leave empty to use existing files beside the SSH configuration and in the current extension user's ~/.ssh directory together, or OpenSSH defaults if neither exists.",
   "configuration.sshExecutablePath": "SSH executable path. Leave empty to use Windows OpenSSH or /usr/bin/ssh.",
   "configuration.connectTimeoutSeconds": "SSH connection timeout in seconds.",
   "configuration.exporterProbeTimeoutSeconds": "Total timeout for probing NPU-Exporter metrics.",

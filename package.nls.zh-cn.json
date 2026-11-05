@@ -15,7 +15,7 @@
   "command.showOutput": "NPU 监控: 显示输出",
   "configuration.title": "NPU 监控",
   "configuration.sshConfigPath": "SSH 配置路径。留空时先使用 remote.SSH.configFile，再自动检测。",
-  "configuration.knownHostsPath": "known_hosts 路径。留空时使用 SSH 配置同目录下的文件。",
+  "configuration.knownHostsPath": "known_hosts 路径覆盖设置。留空时同时使用 SSH 配置同目录和插件当前运行用户 ~/.ssh 目录中已有的文件；两处都不存在时使用 OpenSSH 默认配置。",
   "configuration.sshExecutablePath": "SSH 可执行文件路径。留空时使用 Windows OpenSSH 或 /usr/bin/ssh。",
   "configuration.connectTimeoutSeconds": "SSH 连接超时时间，单位为秒。",
   "configuration.exporterProbeTimeoutSeconds": "探测 NPU-Exporter 指标的总超时时间。",
