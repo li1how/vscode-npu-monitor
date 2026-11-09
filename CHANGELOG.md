@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add host search by alias, address and local note, persistent favorites, and cached host filters with visible/total counts. Replace the idle-host picker with the idle filter while retaining duration ranking.
+- Share fresh NPU summaries between search and the host tree, show unknown idle counts explicitly, and update filters when cached NPU data expires without additional SSH queries.
+
 ## 0.2.5
 
 - Read existing `known_hosts` files beside the SSH configuration and in the extension user's home together, so WSL can use its trusted host keys with a Windows SSH configuration. Preserve explicit path overrides and strict host key verification.

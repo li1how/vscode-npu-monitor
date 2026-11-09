@@ -7,7 +7,9 @@ import { currentSshEnvironment, detectSshExecutablePath } from './ssh/config.js'
 import { buildInteractiveSshArguments } from './ssh/runner.js';
 import { copyContainerInfo, copyContainerSummary, openDevContainer, openSshWindow } from './ui/containerActions.js';
 import { copyHostInfo } from './ui/hostActions.js';
-import { formatDuration, showIdleHistory } from './ui/idleHistory.js';
+import { HostBrowser } from './ui/hostBrowser.js';
+import { registerHostBrowserActions } from './ui/hostBrowserActions.js';
+import { showIdleHistory } from './ui/idleHistory.js';
 import { HostNode, type ContainerNode, type MonitorNode } from './ui/nodes.js';
 import { NpuTreeProvider } from './ui/treeProvider.js';
 
@@ -81,7 +83,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const output = vscode.window.createOutputChannel('NPU Monitor', { log: true });
   const service = new MonitorService(context, output);
   const mcp = new McpController(context, service, output);
-  const provider = new NpuTreeProvider(service, mcp);
+  const browser = new HostBrowser(service, context.globalState);
+  const provider = new NpuTreeProvider(service, mcp, browser);
   const treeView = vscode.window.createTreeView('npuMonitor.hosts', {
     treeDataProvider: provider,
     canSelectMany: true,
@@ -101,32 +104,15 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('npuMonitor.mcpMenu', () => mcp.showMenu()),
     service,
     provider,
+    browser,
     treeView,
+    ...registerHostBrowserActions(browser, treeView),
     service.onDidChange(updateBadge),
     vscode.commands.registerCommand('npuMonitor.scanAll', async () => {
       await runWithProgress(
         vscode.l10n.t('Scanning all NPU hosts'),
         (token, report) => service.scanAll(token, report),
       );
-    }),
-    vscode.commands.registerCommand('npuMonitor.chooseIdleHost', async () => {
-      const candidates = service.getIdleCandidates();
-      if (!candidates.length) {
-        void vscode.window.showInformationMessage(vscode.l10n.t('No recently observed idle NPU hosts.'));
-        return;
-      }
-      const selected = await vscode.window.showQuickPick(candidates.map(candidate => ({
-        label: candidate.alias,
-        description: vscode.l10n.t('Idle for {0} · {1}/{2} NPUs',
-          formatDuration(candidate.durationMs), candidate.idleDevices, candidate.deviceCount),
-        detail: (candidate.deviceId === null ? vscode.l10n.t('All NPUs') : 'NPU ' + candidate.deviceId) +
-          ' · ' + vscode.l10n.t('Updated: {0}', new Date(candidate.observedAt).toLocaleString()),
-        alias: candidate.alias,
-      })), { placeHolder: vscode.l10n.t('Choose an idle NPU host') });
-      if (!selected) return;
-      const node = provider.getChildren().find((item): item is HostNode =>
-        item instanceof HostNode && item.record.host.alias === selected.alias);
-      if (node) await treeView.reveal(node, { select: true, focus: true, expand: true });
     }),
     vscode.commands.registerCommand('npuMonitor.showIdleHistory', async (node?: HostNode) => {
       let alias = node?.record.host.alias;

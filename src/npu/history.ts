@@ -154,7 +154,7 @@ export class IdleHistoryStore {
     this.prune(settings, now);
   }
 
-  public getHistory(alias: string, settings: MonitorSettings, now = Date.now(), host?: SshHost): HostHistoryView {
+  public getHistory(alias: string, settings: MonitorSettings, now = Date.now(), host?: SshHost, includeBins = true): HostHistoryView {
     const saved = this.data.hosts[alias];
     const entry = saved && (!host || saved.identity === identity(host)) && saved.policy === policy(settings)
       ? saved : undefined;
@@ -169,7 +169,7 @@ export class IdleHistoryStore {
             ? 'unknown' : card.state,
           observedAt: card.observedAt,
           idleSince: currentCard(card, settings, now) ? card.idleSince : null,
-          bins: card.bins.filter(([start]) => start + HISTORY_BUCKET_MS > cutoff).map(bin => [...bin] as Bin),
+          bins: includeBins ? card.bins.filter(([start]) => start + HISTORY_BUCKET_MS > cutoff).map(bin => [...bin] as Bin) : [],
         })),
     };
   }

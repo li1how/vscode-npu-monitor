@@ -33,6 +33,17 @@ function memory(): vscode.Memento {
 beforeEach(() => resetVscodeMock());
 
 describe('per-NPU idle history', () => {
+  it('reads current card state without history bins while preserving full timeline access', () => {
+    const settings = getSettings();
+    const history = new IdleHistoryStore(memory());
+    history.observe(host, snapshot(start), settings);
+    const complete = history.getHistory(host.alias, settings, start, host);
+    const current = history.getHistory(host.alias, settings, start, host, false);
+    expect(complete.cards.every(card => card.bins.length > 0)).toBe(true);
+    expect(current.cards).toEqual(complete.cards.map(card => ({ ...card, bins: [] })));
+    expect(history.getHistory(host.alias, settings, start, host)).toEqual(complete);
+  });
+
   it('persists continuous idle time and ranks any-card or all-card candidates consistently', async () => {
     const settings = getSettings();
     expect(settings).toMatchObject({ maxConcurrentHosts: 8, pollIntervalSeconds: 180,

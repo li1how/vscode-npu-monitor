@@ -53,8 +53,8 @@ export class MonitorService implements vscode.Disposable {
     return this.records.get(alias);
   }
 
-  public getIdleHistory(alias: string, now = Date.now()): HostHistoryView {
-    return this.history.getHistory(alias, getSettings(), now, this.records.get(alias)?.host);
+  public getIdleHistory(alias: string, now = Date.now(), includeBins = true): HostHistoryView {
+    return this.history.getHistory(alias, getSettings(), now, this.records.get(alias)?.host, includeBins);
   }
 
   public getIdleCandidates(now = Date.now()): IdleCandidate[] {

@@ -45,8 +45,13 @@
   "command.mcpMenu": "Manage MCP service",
   "configuration.mcp.enabled": "Enable the local MCP service for this workspace.",
   "configuration.mcp.port": "Local MCP port. Restart clients after changing it.",
-  "command.chooseIdleHost": "NPU Monitor: Choose Idle Host",
   "command.showIdleHistory": "NPU Monitor: Show Idle History",
   "configuration.autoRefreshAllHosts": "Scan all configured SSH hosts at startup for NPU and container status, then refresh NPU status automatically. Subscribed hosts receive idle notifications.",
-  "configuration.idleHistoryRetentionDays": "Days of locally stored per-NPU idle history (1–30)."
+  "configuration.idleHistoryRetentionDays": "Days of locally stored per-NPU idle history (1–30).",
+  "command.findHost": "NPU Monitor: Find Host",
+  "command.filterHosts": "NPU Monitor: Filter Hosts",
+  "command.clearHostFilter": "NPU Monitor: Clear Host Filter",
+  "command.favoriteHost": "Favorite Hosts",
+  "command.unfavoriteHost": "Unfavorite Hosts",
+  "command.editHostNote": "Edit Host Note"
 }

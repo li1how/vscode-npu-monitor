@@ -101,7 +101,7 @@ describe('NpuTreeProvider', () => {
     provider.dispose();
   });
 
-  it('provides root parents so the idle picker can reveal host nodes', () => {
+  it('provides root parents so host search can reveal host nodes', () => {
     const record = makeRecord();
     const provider = new NpuTreeProvider(makeService([record]) as never);
     expect(provider.getParent(new HostNode(record))).toBeUndefined();
@@ -144,7 +144,7 @@ describe('NpuTreeProvider', () => {
     });
     const provider = new NpuTreeProvider(makeService([record]) as never);
     const item = provider.getTreeItem(new HostNode(record));
-    expect(item.description as string).toMatch(/^0\/2 idle NPUs · /);
+    expect(item.description as string).toMatch(/^\?\/2 idle NPUs · /);
     expect(item.description as string).not.toContain('2 NPU ·');
     expect(item.description as string).not.toContain('npu-smi');
     expect((item.tooltip as { value: string }).value).toContain('Status: Idle');
@@ -160,16 +160,16 @@ describe('NpuTreeProvider', () => {
     });
     const provider = new NpuTreeProvider(makeService([record]) as never);
     const item = provider.getTreeItem(new HostNode(record));
-    expect(item.description as string).toMatch(/^Timed out · Stale · 0\/1 idle NPUs · /);
+    expect(item.description as string).toMatch(/^Timed out · Stale · \?\/1 idle NPUs · /);
     expect((item.tooltip as { value: string }).value).toContain('Source: Exporter');
     record.state = 'partial';
     record.stale = false;
     expect(provider.getTreeItem(new HostNode(record)).description as string)
-      .toMatch(/^Partial data · 0\/1 idle NPUs · /);
+      .toMatch(/^Partial data · \?\/1 idle NPUs · /);
     record.state = 'idle';
     record.snapshot!.collectedAt = Date.now() - 361000;
     expect(provider.getTreeItem(new HostNode(record)).description as string)
-      .toMatch(/^Idle · Stale · 0\/1 idle NPUs · /);
+      .toMatch(/^Idle · Stale · \?\/1 idle NPUs · /);
     provider.dispose();
   });
 

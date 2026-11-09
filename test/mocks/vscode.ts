@@ -98,11 +98,50 @@ export const createdTerminals: Array<{
   shown: boolean;
 }> = [];
 export const terminalFailures: unknown[] = [];
+export const registeredCommands = new Map<string, (...args: any[]) => unknown>();
+export const quickPicks: TestQuickPick<any>[] = [];
+export const inputBoxRequests: unknown[] = [];
+export const inputBoxValues: Array<string | undefined> = [];
+export const quickPickRequests: Array<{ items: unknown[]; options: unknown }> = [];
+
+export class TestQuickPick<T extends { label: string }> {
+  public title = '';
+  public placeholder = '';
+  public matchOnDescription = false;
+  public matchOnDetail = false;
+  public items: readonly T[] = [];
+  public activeItems: readonly T[] = [];
+  public selectedItems: readonly T[] = [];
+  public disposed = false;
+  public shown = false;
+  private readonly acceptEmitter = new EventEmitter<void>();
+  private readonly hideEmitter = new EventEmitter<void>();
+  public readonly onDidAccept = this.acceptEmitter.event;
+  public readonly onDidHide = this.hideEmitter.event;
+  public show(): void { this.shown = true; }
+  public hide(): void { this.hideEmitter.fire(); }
+  public accept(): void { this.acceptEmitter.fire(); }
+  public dispose(): void {
+    this.disposed = true;
+    this.acceptEmitter.dispose();
+    this.hideEmitter.dispose();
+  }
+}
 
 export const window = {
   quickPickAction: '',
-  async showQuickPick(items: Array<{ label: string; action: string }>) {
-    return items.find(item => item.action === window.quickPickAction);
+  async showQuickPick<T extends { label: string; action?: string; filter?: string }>(items: T[], options?: unknown) {
+    quickPickRequests.push({ items, options });
+    return items.find(item => (item.action ?? item.filter ?? item.label) === window.quickPickAction);
+  },
+  createQuickPick<T extends { label: string }>(): TestQuickPick<T> {
+    const picker = new TestQuickPick<T>();
+    quickPicks.push(picker);
+    return picker;
+  },
+  async showInputBox(options: unknown): Promise<string | undefined> {
+    inputBoxRequests.push(options);
+    return inputBoxValues.shift();
   },
   createTerminal(options: unknown): { show: () => void } {
     if (terminalFailures.length > 0) {
@@ -146,16 +185,20 @@ export const workspace = {
 };
 
 export const commands = {
+  registerCommand(command: string, handler: (...args: any[]) => unknown): { dispose: () => void } {
+    registeredCommands.set(command, handler);
+    return { dispose: () => { registeredCommands.delete(command); } };
+  },
   async getCommands(): Promise<string[]> {
     return [...availableCommands];
   },
-  async executeCommand(command: string, ...args: unknown[]): Promise<undefined> {
+  async executeCommand(command: string, ...args: unknown[]): Promise<unknown> {
     executedCommands.push(command);
     commandCalls.push({ command, args });
     if (commandFailures.has(command)) {
       throw commandFailures.get(command);
     }
-    return undefined;
+    return registeredCommands.get(command)?.(...args);
   },
 };
 
@@ -179,4 +222,9 @@ export function resetVscodeMock(): void {
   configurationValues.clear();
   createdTerminals.length = 0;
   terminalFailures.length = 0;
+  registeredCommands.clear();
+  quickPicks.length = 0;
+  inputBoxRequests.length = 0;
+  inputBoxValues.length = 0;
+  quickPickRequests.length = 0;
 }
