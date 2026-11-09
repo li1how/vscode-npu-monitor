@@ -2,10 +2,9 @@ import * as vscode from 'vscode';
 
 import { readHostPreference, type HostPreference } from './hostPreferences.js';
 import { DevContainerCollector } from './containers/collector.js';
-import { ImageCollector } from './containers/images.js';
 import { NpuCollector } from './npu/collector.js';
 import { evaluateSnapshot } from './npu/idle.js';
-import { IdleHistoryStore, type HostHistoryView, type IdleCandidate } from './npu/history.js';
+import { IdleHistoryStore, type HostHistoryView } from './npu/history.js';
 import { getSettings } from './settings.js';
 import { currentSshEnvironment, loadSshHosts } from './ssh/config.js';
 import { SshRunner } from './ssh/runner.js';
@@ -27,7 +26,6 @@ export class MonitorService implements vscode.Disposable {
   private readonly changeEmitter = new vscode.EventEmitter<void>();
   private collector?: NpuCollector;
   private devContainerCollector?: DevContainerCollector;
-  private imageCollector?: ImageCollector;
   private pollTimer?: NodeJS.Timeout;
   private automaticScanRunning = false;
   private subscriptions = new Set<string>();
@@ -73,10 +71,6 @@ export class MonitorService implements vscode.Disposable {
     return this.history.getHistory(alias, getSettings(), now, this.records.get(alias)?.host, includeBins);
   }
 
-  public getIdleCandidates(now = Date.now()): IdleCandidate[] {
-    return this.history.getCandidates(this.getRecords(), getSettings(), now);
-  }
-
   public async initialize(): Promise<void> {
     await this.reloadConfig(false);
     const settings = getSettings();
@@ -119,7 +113,6 @@ export class MonitorService implements vscode.Disposable {
         executablePath: loaded.sshExecutablePath,
         connectTimeoutSeconds: settings.connectTimeoutSeconds,
       });
-      this.imageCollector = new ImageCollector(runner);
       this.devContainerCollector = settings.devContainersEnabled
         ? new DevContainerCollector(runner, settings) : undefined;
       this.collector = new NpuCollector(
@@ -186,15 +179,6 @@ export class MonitorService implements vscode.Disposable {
         if (record) await this.scanContainers(record);
       }
     }));
-  }
-
-  public async listHostImages(alias: string) {
-    await this.reloadConfig();
-    const record = this.records.get(alias);
-    if (!record || record.state === 'missingConfig' || !this.imageCollector) {
-      throw new Error('Unknown or unavailable SSH host');
-    }
-    return this.imageCollector.list(record.host);
   }
 
   public async subscribe(alias: string): Promise<void> {
@@ -280,7 +264,7 @@ export class MonitorService implements vscode.Disposable {
     records: HostRecord[],
     token?: vscode.CancellationToken,
     onProgress?: (progress: ScanProgress) => void,
-    includeContainers: boolean | ((record: HostRecord) => boolean) = true,
+    includeContainers = true,
   ): Promise<void> {
     const total = records.length;
     let completed = 0;
@@ -294,8 +278,7 @@ export class MonitorService implements vscode.Disposable {
         if (!record) {
           continue;
         }
-        await this.scanRecord(record, token, typeof includeContainers === 'boolean'
-          ? includeContainers : includeContainers(record));
+        await this.scanRecord(record, token, includeContainers);
         completed += 1;
         onProgress?.({ completed, total, alias: record.host.alias });
       }

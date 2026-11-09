@@ -5,9 +5,9 @@ const CURSOR_TTL_MS = 120_000;
 const MAX_SNAPSHOTS = 32;
 const CACHE_BYTES = 8 * 1024 * 1024;
 
-export interface QueryResult {
+export interface QueryResult<Data extends Record<string, unknown> = Record<string, unknown>> {
   asOf: number;
-  data: Record<string, unknown>;
+  data: Data;
   page?: { total: number; returned: number; nextCursor: string | null };
   error?: { code: string; message: string };
 }
@@ -18,7 +18,7 @@ export class QueryError extends Error {
 
 export function byteSize(value: unknown): number { return Buffer.byteLength(JSON.stringify(value), 'utf8'); }
 
-export function bounded(result: QueryResult): QueryResult {
+export function bounded<Result extends QueryResult>(result: Result): Result {
   if (byteSize(result) > RESULT_BYTES) {
     throw new QueryError('RESULT_TOO_LARGE', 'Result exceeds 16 KiB. Narrow the query, section or time range.');
   }
@@ -31,21 +31,24 @@ export function failure(error: unknown): QueryResult {
     : { code: 'QUERY_FAILED', message: 'The operation failed.' } };
 }
 
-interface PageSource {
-  data: Record<string, unknown>;
-  field: string;
-  rows: unknown[];
+export interface PageSource<Data extends Record<string, unknown> = Record<string, unknown>, Field extends string = string, Row = unknown> {
+  data: Data;
+  field: Field;
+  rows: Row[];
 }
 interface Snapshot extends PageSource { key: string; asOf: number; bytes: number }
+
+export type PageResult<Data extends Record<string, unknown>, Field extends string, Row> =
+  QueryResult<Data & Record<Field, Row[]>> & { page: NonNullable<QueryResult['page']> };
 
 export class SnapshotPages {
   private readonly snapshots = new Map<string, Snapshot>();
 
   public clear(): void { this.snapshots.clear(); }
 
-  public page(
-    key: string, limit: number, cursor: string | undefined, build: (asOf: number) => PageSource,
-  ): QueryResult {
+  public page<Data extends Record<string, unknown>, const Field extends string, Row>(
+    key: string, limit: number, cursor: string | undefined, build: (asOf: number) => PageSource<Data, Field, Row>,
+  ): PageResult<Data, Field, Row> {
     const now = Date.now();
     for (const [id, snapshot] of this.snapshots) {
       if (now < snapshot.asOf || now - snapshot.asOf >= CURSOR_TTL_MS) this.snapshots.delete(id);
@@ -72,9 +75,10 @@ export class SnapshotPages {
       if (bytes > CACHE_BYTES) throw new QueryError('RESULT_TOO_LARGE', 'Query snapshot exceeds 8 MiB. Narrow the query or time range.');
       snapshot = { ...structuredClone(source), key, asOf: now, bytes };
     }
-    const result = (count: number): QueryResult => ({
+    const result = (count: number): PageResult<Data, Field, Row> => ({
       asOf: snapshot.asOf,
-      data: { ...snapshot.data, [snapshot.field]: snapshot.rows.slice(offset, offset + count) },
+      // Continuation keys bind the saved snapshot to the same query and row shape.
+      data: { ...snapshot.data, [snapshot.field]: snapshot.rows.slice(offset, offset + count) } as Data & Record<Field, Row[]>,
       page: { total: snapshot.rows.length, returned: count,
         nextCursor: offset + count < snapshot.rows.length
           ? Buffer.from(JSON.stringify([id, offset + count])).toString('base64url') : null },

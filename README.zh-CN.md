@@ -1,6 +1,6 @@
 # NPU Monitor for VS Code
 
-[English](README.md) | 简体中文
+[English](https://github.com/li1how/vscode-npu-monitor/blob/main/README.md) | 简体中文
 
 通过 SSH 监控多台机器上的 Ascend NPU 和 Docker 容器，支持 Windows VS Code
 和 WSL VS Code。界面语言跟随 VS Code 的中文或英文设置。
@@ -35,46 +35,16 @@
 
 ## 构建和安装
 
+使用 Node.js 24 LTS 从源码构建（`npm run vsix` 已包含全部检查）：
+
 ```bash
-npm install
-npm run check
+npm ci
 npm run vsix
 code --install-extension release/vscode-npu-monitor-0.2.5.vsix
 ```
 
 同一个 VSIX 可以安装到 Windows 本地 Extension Host 或 WSL Extension Host。
 在 WSL 工作区中，应选择 VS Code 的“Install in WSL”。
-
-开发时可以单独打开本目录并按 `F5` 启动 Extension Development Host：
-
-```bash
-code .
-```
-
-## 发布
-
-推送与 `package.json` 版本一致的 `vX.Y.Z` 标签后，GitHub Actions 会自动运行检查、
-打包 VSIX，并通过 [github/copilot-release-notes](https://github.com/github/copilot-release-notes)
-根据已合入 PR 生成 Release Notes，遵循包含固定历史样例的[简短写作规范](.github/release-notes-instructions.md)，
-然后发布 GitHub Release。标签必须指向 `main` 上的提交，仅支持稳定的三段式版本。
-PR 请使用 merge 或 squash 合入，并在提交标题中保留 PR 编号。
-
-工作流使用 Actions 自带的 `GITHUB_TOKEN`，需要可用的 Copilot 权限和额度。
-仓库变量 `RELEASE_NOTES_MODEL` 可选，未设置时使用 Copilot 默认模型；说明生成失败时停止发布。
-
-准备新版本时更新 `package.json`、`package-lock.json` 和 `CHANGELOG.md`：
-
-```bash
-npm version 0.2.5 --no-git-tag-version
-git add package.json package-lock.json CHANGELOG.md
-git commit -m "[Release] Prepare v0.2.5"
-git push origin main
-git tag -a v0.2.5 -m "v0.2.5"
-git push origin v0.2.5
-```
-
-发布附件名根据版本自动生成，例如
-`release/vscode-npu-monitor-0.2.5.vsix`。GitHub 同时提供源码 zip 和 tar.gz。
 
 ## 使用
 
@@ -92,8 +62,8 @@ git push origin v0.2.5
 9. 容器行的复制图标用于“复制精简信息”，右键菜单提供“复制完整信息”，均支持多选。
 
 启动首轮和手动扫描先采集 NPU 数据，再执行只读 Docker 查询。默认展示 Dev Container，并优先使用
-配置中的项目名称。采集失败时保留上次成功的数据并标记“数据已过期”。空闲历史从此版本开始在
-当前扩展运行环境的本地保存；采集失败、数据不完整或观测超时不会延长连续空闲时长。
+配置中的项目名称。采集失败时保留上次成功的数据并标记“数据已过期”。空闲历史保存在
+当前扩展运行环境的本地；采集失败、数据不完整或观测超时不会延长连续空闲时长。
 修改逐卡空闲阈值或进程规则后，将按新规则重新积累历史。
 
 打开容器时，Remote - SSH 需使用与 NPU Monitor 一致的 SSH 配置和主机别名。
@@ -212,49 +182,4 @@ SSH 相关路径支持 `~`、`${env:NAME}` 和 Windows `%NAME%` 环境变量。W
 
 ## 开发相关
 
-开发和打包使用 Node.js 24 LTS。运行时类型与 VS Code 1.100 / Node.js 20 对齐，
-TypeScript 6 和 Vitest 4 保持工具链兼容。
-
-### 目录结构
-
-```text
-src/
-  extension.ts       # 扩展入口与命令注册
-  settings.ts        # 配置读取
-  types.ts           # 共享数据类型
-  monitorService.ts  # 订阅、扫描调度和缓存
-  mcp/               # MCP 服务、缓存查询和生命周期
-  ssh/               # SSH 配置与执行
-  npu/               # NPU 采集、解析和空闲判断
-  containers/        # 容器采集、元数据和筛选
-  ui/                # 树视图与操作命令
-test/                # 自动测试
-  ssh/
-  npu/
-  containers/
-  ui/
-  extension.test.ts
-  monitorService.test.ts
-  fixtures/          # 共享样本
-  mocks/             # 共享模拟对象
-scripts/             # 打包脚本
-l10n/                # 界面翻译
-media/               # 图标和演示资源
-```
-
-### 开发约定
-
-- 同时支持 Windows 原生 OpenSSH 和 WSL `/usr/bin/ssh`，跨平台差异应有测试覆盖。
-- 命令、配置和文档保持中英文一致。
-- 提交信息使用简短英文，格式为 `[Tag] Brief description`。
-
-### 开发命令
-
-```bash
-npm run check-types
-npm run lint
-npm test
-npm run compile
-npm run check
-npm run vsix
-```
+环境准备、项目结构、检查和发布流程见[开发指南](CONTRIBUTING.zh-CN.md)。

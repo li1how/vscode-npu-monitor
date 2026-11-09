@@ -2,27 +2,26 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import { version } from '../../package.json';
-import type { MonitorSettings } from '../types.js';
+import { HOST_STATES, type MonitorSettings } from '../types.js';
 import { getHistory } from './history.js';
-import { inspectHost, overview, queryHosts, refreshHosts, SECTIONS, type MonitorReader } from './queries.js';
+import { inspectHost, overview, queryHosts, refreshHosts, SECTIONS } from './queries.js';
 import { bounded, failure, type QueryResult, SnapshotPages } from './results.js';
+import type { MonitorMcpService } from './types.js';
 
-export type { MonitorReader } from './queries.js';
 const pageInput = {
   limit: z.number().int().min(1).max(50).default(10).describe('Maximum rows; the response byte budget may reduce the page size.'),
   cursor: z.string().min(1).max(1024).optional().describe('Previous nextCursor; keep the other query conditions unchanged.'),
 };
 const host = z.string().min(1).max(512);
 const query = z.string().trim().min(1).max(256).optional();
-const state = z.enum(['unknown', 'refreshing', 'idle', 'busy', 'partial', 'unhealthy', 'unreachable',
-  'timeout', 'authError', 'hostKeyError', 'unsupported', 'error', 'missingConfig']);
+const state = z.enum(HOST_STATES);
 const outputSchema = {
   asOf: z.number(), data: z.record(z.string(), z.unknown()),
   page: z.object({ total: z.number().int(), returned: z.number().int(), nextCursor: z.string().nullable() }).optional(),
   error: z.object({ code: z.string(), message: z.string() }).optional(),
 };
 
-export function createMonitorMcp(service: MonitorReader, settings: () => MonitorSettings, pages = new SnapshotPages()): McpServer {
+export function createMonitorMcp(service: MonitorMcpService, settings: () => MonitorSettings, pages = new SnapshotPages()): McpServer {
   const server = new McpServer({ name: 'npu-monitor', version }, {
     instructions: 'Queries read caches; only refresh_hosts runs SSH collection. NPU observations expire after twice the poll interval; containers have no fixed expiry. Pages use fixed asOf snapshots. Idle is not a reservation. Subscriptions and remote resources are unchanged.',
   });

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 
 import { getSettings } from '../settings.js';
 import { MonitorHttpServer } from './server.js';
-import type { MonitorReader } from './tools.js';
+import type { MonitorMcpService } from './types.js';
 
 export class McpController implements vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<void>();
@@ -18,7 +18,7 @@ export class McpController implements vscode.Disposable {
   private queue = Promise.resolve();
   private readonly server: MonitorHttpServer;
 
-  public constructor(private readonly context: vscode.ExtensionContext, service: MonitorReader,
+  public constructor(private readonly context: vscode.ExtensionContext, service: MonitorMcpService,
     private readonly output: vscode.LogOutputChannel) {
     this.server = new MonitorHttpServer(service, getSettings);
   }

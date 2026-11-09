@@ -2,44 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { ContainerNode, DeviceNode, HostNode } from '../../src/ui/nodes.js';
 import { NpuTreeProvider } from '../../src/ui/treeProvider.js';
-import type { DevContainer, HostRecord, NpuDevice } from '../../src/types.js';
+import type { DevContainer, HostRecord } from '../../src/types.js';
+import { makeDevice, makeRecord } from '../helpers/fixtures.js';
 import { configurationValues, resetVscodeMock } from '../mocks/vscode.js';
-
-function makeRecord(overrides: Partial<HostRecord> = {}): HostRecord {
-  return {
-    host: {
-      alias: 'alpha',
-      hostname: '10.0.0.1',
-      user: 'root',
-      port: 22,
-      identityFiles: [],
-      configPath: '/tmp/config',
-      useAlias: false,
-    },
-    state: 'unknown',
-    refreshing: false,
-    subscribed: false,
-    idleStreak: 0,
-    idleNotified: false,
-    stale: false,
-    ...overrides,
-  };
-}
-
-function makeDevice(overrides: Partial<NpuDevice> = {}): NpuDevice {
-  return {
-    id: '0',
-    model: 'Ascend910',
-    health: 'OK',
-    utilizationPercent: 0,
-    hbmUsedMb: 4096,
-    hbmTotalMb: 65536,
-    temperatureC: 30,
-    processCount: 0,
-    processes: [],
-    ...overrides,
-  };
-}
 
 function makeService(records: HostRecord[]): {
   getRecords: () => HostRecord[];
@@ -62,7 +27,7 @@ describe('NpuTreeProvider', () => {
 
     const records = [makeRecord({ host: { ...makeRecord().host, alias: 'alpha' } }),
       makeRecord({ host: { ...makeRecord().host, alias: 'beta' } })];
-    const provider = new NpuTreeProvider(makeService(records) as never);
+    const provider = new NpuTreeProvider(makeService(records));
     const children = provider.getChildren();
     expect(children).toHaveLength(2);
     expect(children[0]).toBeInstanceOf(HostNode);
@@ -83,7 +48,7 @@ describe('NpuTreeProvider', () => {
         durationMs: 1,
       },
     });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const hostNode = new HostNode(record);
     const children = provider.getChildren(hostNode);
     expect(children).toHaveLength(1);
@@ -94,7 +59,7 @@ describe('NpuTreeProvider', () => {
   it('returns no children when a HostNode has no snapshot', () => {
 
     const record = makeRecord();
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const hostNode = new HostNode(record);
     const children = provider.getChildren(hostNode);
     expect(children).toHaveLength(0);
@@ -103,7 +68,7 @@ describe('NpuTreeProvider', () => {
 
   it('provides root parents so host search can reveal host nodes', () => {
     const record = makeRecord();
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     expect(provider.getParent(new HostNode(record))).toBeUndefined();
     expect(provider.getParent(new DeviceNode(record, makeDevice()))).toBeInstanceOf(HostNode);
     provider.dispose();
@@ -112,7 +77,7 @@ describe('NpuTreeProvider', () => {
   it('returns no children for a DeviceNode (leaf node)', () => {
 
     const record = makeRecord();
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const deviceNode = new DeviceNode(record, makeDevice());
     expect(provider.getChildren(deviceNode)).toHaveLength(0);
     provider.dispose();
@@ -122,7 +87,7 @@ describe('NpuTreeProvider', () => {
 
     const subscribedRecord = makeRecord({ subscribed: true });
     const unsubscribedRecord = makeRecord({ subscribed: false });
-    const provider = new NpuTreeProvider(makeService([]) as never);
+    const provider = new NpuTreeProvider(makeService([]));
     const subscribedItem = provider.getTreeItem(new HostNode(subscribedRecord));
     const unsubscribedItem = provider.getTreeItem(new HostNode(unsubscribedRecord));
     expect(subscribedItem.contextValue).toBe('npuHostSubscribed');
@@ -142,7 +107,7 @@ describe('NpuTreeProvider', () => {
         durationMs: 1,
       },
     });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const item = provider.getTreeItem(new HostNode(record));
     expect(item.description as string).toMatch(/^\?\/2 idle NPUs · /);
     expect(item.description as string).not.toContain('2 NPU ·');
@@ -158,7 +123,7 @@ describe('NpuTreeProvider', () => {
       snapshot: { source: 'exporter', devices: [makeDevice()], partial: false,
         collectedAt: Date.now(), durationMs: 1 },
     });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const item = provider.getTreeItem(new HostNode(record));
     expect(item.description as string).toMatch(/^Timed out · Stale · \?\/1 idle NPUs · /);
     expect((item.tooltip as { value: string }).value).toContain('Source: Exporter');
@@ -176,7 +141,7 @@ describe('NpuTreeProvider', () => {
   it('shows refreshing text when record is refreshing', () => {
 
     const record = makeRecord({ refreshing: true });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const item = provider.getTreeItem(new HostNode(record));
     expect(item.description as string).toContain('Refreshing');
     provider.dispose();
@@ -191,7 +156,7 @@ describe('NpuTreeProvider', () => {
       hbmTotalMb: 65536,
       processCount: 2,
     });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const item = provider.getTreeItem(new DeviceNode(record, device));
     expect(item.description as string).toContain('75%');
     expect(item.description as string).toContain('16000/65536 MB');
@@ -202,7 +167,7 @@ describe('NpuTreeProvider', () => {
   it('sets npuDevice context value on device tree items', () => {
 
     const record = makeRecord();
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const item = provider.getTreeItem(new DeviceNode(record, makeDevice()));
     expect(item.contextValue).toBe('npuDevice');
     provider.dispose();
@@ -210,7 +175,7 @@ describe('NpuTreeProvider', () => {
 
   it.each([undefined, '', '   '])('displays unknown model metadata for %j', model => {
     const record = makeRecord();
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const item = provider.getTreeItem(new DeviceNode(record, makeDevice({ model })));
     expect((item.tooltip as { value: string }).value).toContain('Model: Unknown');
     provider.dispose();
@@ -221,7 +186,7 @@ describe('Dev Container tree', () => {
   it('groups NPU and containers, including hosts without NPU data', () => {
     resetVscodeMock();
     const record = makeRecord();
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const groups = provider.getChildren(new HostNode(record));
     expect(groups.map(x => provider.getTreeItem(x).label)).toEqual(['NPU', 'Dev Containers']);
     expect(provider.getChildren(groups[1]).map(x => provider.getTreeItem(x).label)).toEqual(['Not scanned']);
@@ -235,7 +200,7 @@ describe('Dev Container tree', () => {
     const record = makeRecord({ devContainers: { state: 'timeout', error: 'Timed out', stale: true,
       refreshing: false, snapshot: { containers: [container], collectedAt: Date.now(), durationMs: 1 } } });
     const second = { ...record, host: { ...record.host, alias: 'beta' } };
-    const provider = new NpuTreeProvider(makeService([record, second]) as never);
+    const provider = new NpuTreeProvider(makeService([record, second]));
     const groups = provider.getChildren(new HostNode(record));
     const children = provider.getChildren(groups[1]);
     expect(provider.getTreeItem(children[0]!).label).toBe('Timed out');
@@ -257,7 +222,7 @@ describe('Dev Container tree', () => {
     resetVscodeMock();
     const record = makeRecord({ devContainers: { state: 'ready', stale: false, refreshing: false,
       snapshot: { containers: [], collectedAt: Date.now(), durationMs: 1 } } });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const group = provider.getChildren(new HostNode(record))[1];
     expect(provider.getTreeItem(provider.getChildren(group)[0]!).label).toBe('No Dev Containers found');
     record.devContainers = { state: 'missingDocker', stale: false, refreshing: false };
@@ -272,7 +237,7 @@ describe('Dev Container tree', () => {
     const ordinary = { ...dev, id: 'b'.repeat(64), isDevContainer: false, name: 'service' };
     const record = makeRecord({ devContainers: { state: 'ready', stale: false, refreshing: false,
       snapshot: { containers: [dev, ordinary], collectedAt: 0, durationMs: 1 } } });
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const group = provider.getChildren(new HostNode(record))[1]!;
     const identity = provider.getTreeItem(new ContainerNode(record, dev)).id;
     expect(provider.getTreeItem(group).description).toBe('1');
@@ -325,7 +290,7 @@ describe('visible container name disambiguation', () => {
     const ordinary = { ...first, id: 'c'.repeat(64), isDevContainer: false, name: 'project' };
     const unique = { ...first, id: 'd'.repeat(64), displayName: 'other' };
     const record = recordFor([first, second, ordinary, unique]);
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const group = provider.getChildren(new HostNode(record))[1]!;
     const items = provider.getChildren(group).map(node => provider.getTreeItem(node));
     expect(items.map(item => item.label)).toEqual(['project', 'project', 'project', 'other']);
@@ -340,7 +305,7 @@ describe('visible container name disambiguation', () => {
   it('recalculates duplicate names when workspace filters change, preserving snapshot and IDs', () => {
     const record = recordFor([first, second]);
     const snapshot = record.devContainers!.snapshot;
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const group = provider.getChildren(new HostNode(record))[1]!;
     const items = () => provider.getChildren(group).map(node => provider.getTreeItem(node));
     const initial = items();
@@ -359,7 +324,7 @@ describe('visible container name disambiguation', () => {
 
   it('recalculates names after snapshot replacement, stale recovery and container removal', () => {
     const record = recordFor([first, second]);
-    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const provider = new NpuTreeProvider(makeService([record]));
     const group = provider.getChildren(new HostNode(record))[1]!;
     const items = () => provider.getChildren(group).filter(node => node instanceof ContainerNode)
       .map(node => provider.getTreeItem(node));
@@ -382,7 +347,7 @@ describe('visible container name disambiguation', () => {
   it('keeps duplicate-name detection local to each host even when IDs and names coincide', () => {
     const alpha = recordFor([first, second]);
     const beta = recordFor([first], 'beta');
-    const provider = new NpuTreeProvider(makeService([alpha, beta]) as never);
+    const provider = new NpuTreeProvider(makeService([alpha, beta]));
     const firstItem = (record: HostRecord) => provider.getTreeItem(
       provider.getChildren(provider.getChildren(new HostNode(record))[1]!)[0]!,
     );

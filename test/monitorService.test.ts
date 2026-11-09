@@ -1,9 +1,9 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import type * as vscode from 'vscode';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DevContainerScanResult, MonitorSettings, ScanResult, SshHost } from '../src/types.js';
 import {
@@ -11,6 +11,8 @@ import {
   resetVscodeMock,
   window,
 } from './mocks/vscode.js';
+
+import { createMemento, makeSettings } from './helpers/fixtures.js';
 
 type ScanHandler = (
   host: SshHost,
@@ -85,27 +87,29 @@ function snapshot(utilizationPercent: number, processCount: number): ScanResult 
 }
 
 function createContext(subscriptions: string[] = []): vscode.ExtensionContext {
-  const values = new Map<string, unknown>([['npuMonitor.subscriptions', subscriptions]]);
-  const global = new Map<string, unknown>();
   return {
-    globalState: {
-      get<T>(key: string): T | undefined { return global.get(key) as T | undefined; },
-      async update(key: string, value: unknown): Promise<void> { global.set(key, value); },
-    },
-    workspaceState: {
-      get<T>(key: string, defaultValue?: T): T | undefined {
-        return (values.has(key) ? values.get(key) : defaultValue) as T | undefined;
-      },
-      async update(key: string, value: unknown): Promise<void> {
-        values.set(key, value);
-      },
-    },
+    globalState: createMemento(),
+    workspaceState: createMemento({ 'npuMonitor.subscriptions': subscriptions }),
   } as unknown as vscode.ExtensionContext;
 }
 
 function createService(subscriptions: string[] = [], context = createContext(subscriptions)): MonitorService {
   const output = { appendLine: vi.fn() } as unknown as vscode.OutputChannel;
   return new MonitorService(context, output);
+}
+
+const directories: string[] = [];
+
+afterEach(() => {
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+
+function temporaryConfig(prefix: string, text: string): string {
+  const directory = mkdtempSync(path.join(os.tmpdir(), prefix));
+  directories.push(directory);
+  const configPath = path.join(directory, 'config');
+  writeFileSync(configPath, text);
+  return configPath;
 }
 
 describe('monitor scan orchestration', () => {
@@ -116,33 +120,12 @@ describe('monitor scan orchestration', () => {
     containersState.handler = async () => ({ state: 'ready', snapshot: { containers: [], collectedAt: Date.now(), durationMs: 1 } });
     collectorState.aliases.length = 0;
     collectorState.handler = async () => snapshot(20, 1);
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-service-'));
-    const configPath = path.join(directory, 'config');
-    writeFileSync(configPath, [
-      'Host alpha beta gamma',
-      '  User root',
-      '  Port 22',
-      '',
-    ].join('\n'));
-    settingsState.value = {
-      sshConfigPath: configPath,
-      remoteSshConfigFile: '',
-      knownHostsPath: '',
-      sshExecutablePath: '/usr/bin/ssh',
-      connectTimeoutSeconds: 8,
-      exporterProbeTimeoutSeconds: 2,
-      npuSmiTimeoutSeconds: 10,
-      maxConcurrentHosts: 2,
-      excludedHosts: [],
-      pollIntervalSeconds: 3600, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7,
-      idleScope: 'allCards',
-      idleRequireNoProcesses: true,
-      idleUtilizationThresholdPercent: 1,
+    const configPath = temporaryConfig('npu-monitor-service-', 'Host alpha beta gamma\n  User root\n  Port 22\n');
+    settingsState.value = makeSettings({
+      sshConfigPath: configPath, sshExecutablePath: '/usr/bin/ssh', maxConcurrentHosts: 2,
+      pollIntervalSeconds: 3600, autoRefreshAllHosts: false, idleScope: 'allCards',
       devContainersEnabled: false,
-      devContainersTimeoutSeconds: 5,
-      containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
-      idleConsecutiveChecks: 1,
-    };
+    });
   });
 
   it('restores and automatically scans only subscribed hosts', async () => {
@@ -293,18 +276,11 @@ describe('Dev Container scan orchestration', () => {
       containers: [{ id: 'a'.repeat(64), isDevContainer: true, name: 'dev', image: 'image', state: 'running', createdAt: 'now' }],
       collectedAt: Date.now(), durationMs: 1,
     } });
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-container-service-'));
-    const configPath = path.join(directory, 'config');
-    writeFileSync(configPath, 'Host alpha beta gamma\n  User root\n');
-    settingsState.value = {
-      sshConfigPath: configPath, remoteSshConfigFile: '', knownHostsPath: '',
-      sshExecutablePath: '/usr/bin/ssh', connectTimeoutSeconds: 8,
-      exporterProbeTimeoutSeconds: 2, npuSmiTimeoutSeconds: 10, maxConcurrentHosts: 2,
-      excludedHosts: [], pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7, idleScope: 'allCards',
-      idleRequireNoProcesses: true, idleUtilizationThresholdPercent: 1,
-      idleConsecutiveChecks: 1, devContainersEnabled: true, devContainersTimeoutSeconds: 5,
-      containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
-    };
+    const configPath = temporaryConfig('npu-container-service-', 'Host alpha beta gamma\n  User root\n');
+    settingsState.value = makeSettings({
+      sshConfigPath: configPath, sshExecutablePath: '/usr/bin/ssh', maxConcurrentHosts: 2,
+      pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleScope: 'allCards',
+    });
   });
 
   it('publishes NPU state before Docker completes and does not wait for idle notification dismissal', async () => {

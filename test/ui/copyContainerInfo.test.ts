@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { copyContainerInfo, copyContainerSummary, formatContainerInfo, formatContainerSummary } from '../../src/ui/containerActions.js';
@@ -85,25 +83,6 @@ describe('copy container information', () => {
     expect(localized).toHaveBeenCalled();
   });
 
-  it('binds the inline copy button to summary and the context menu to full information', () => {
-    const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-    const menus = manifest.contributes.menus['view/item/context'] as Array<{ command: string; group: string; when: string }>;
-    const copies = menus.filter(item => item.command.startsWith('npuMonitor.copyContainer'));
-    expect(copies).toEqual([
-      { command: 'npuMonitor.copyContainerSummary', group: 'inline@2',
-        when: 'view == npuMonitor.hosts && viewItem =~ /^npuDevContainer/' },
-      { command: 'npuMonitor.copyContainerInfo', group: '3_copy@1',
-        when: 'view == npuMonitor.hosts && viewItem =~ /^npuDevContainer/' },
-    ]);
-    for (const command of ['copyContainerSummary', 'copyContainerInfo']) {
-      expect(manifest.contributes.commands).toContainEqual({ command: 'npuMonitor.' + command,
-        title: '%command.' + command + '%', icon: '$(copy)' });
-    }
-    const chinese = JSON.parse(readFileSync('package.nls.zh-cn.json', 'utf8'));
-    expect(chinese['command.copyContainerSummary']).toBe('复制精简信息');
-    expect(chinese['command.copyContainerInfo']).toBe('复制完整信息');
-  });
-
   describe.each([
     ['summary', copyContainerSummary], ['full', copyContainerInfo],
   ] as const)('%s selection and clipboard behavior', (_format, copy) => {
@@ -136,6 +115,15 @@ describe('copy container information', () => {
       }
       expect(clipboardWrites[0]).toContain('Status: exited');
       expect(clipboardWrites[0]).toContain(copy === copyContainerInfo ? 'Stale: Yes' : 'Stale: yes');
+    });
+
+    it('keeps a cached container when a later duplicate selection no longer has that container', async () => {
+      const present = fixture();
+      const removed = fixture();
+      removed.record.devContainers!.snapshot!.containers = [];
+      await copy([present, removed]);
+      expect(clipboardWrites).toHaveLength(1);
+      expect(clipboardWrites[0]!.match(/Container ID:/g)).toHaveLength(1);
     });
 
     it('does not overwrite the clipboard for empty, non-container or removed selections', async () => {

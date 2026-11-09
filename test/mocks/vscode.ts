@@ -1,3 +1,5 @@
+import type * as vscode from 'vscode';
+
 type Listener<T> = (event: T) => unknown;
 
 export class EventEmitter<T> {
@@ -12,6 +14,10 @@ export class EventEmitter<T> {
     for (const listener of this.listeners) {
       listener(event);
     }
+  }
+
+  public async fireAsync(event: T): Promise<void> {
+    await Promise.all([...this.listeners].map(listener => listener(event)));
   }
 
   public dispose(): void {
@@ -103,6 +109,45 @@ export const quickPicks: TestQuickPick<any>[] = [];
 export const inputBoxRequests: unknown[] = [];
 export const inputBoxValues: Array<string | undefined> = [];
 export const quickPickRequests: Array<{ items: unknown[]; options: unknown }> = [];
+export const openDialogResults: Array<Array<{ fsPath: string }> | undefined> = [];
+export const outputChannels: TestOutputChannel[] = [];
+export const treeViews: TestTreeView<any>[] = [];
+export const progressReports: Array<{ increment?: number; message?: string }> = [];
+export const progressRequests: unknown[] = [];
+const progressCancellation = new EventEmitter<void>();
+export const progressToken = { isCancellationRequested: false, onCancellationRequested: progressCancellation.event };
+export const ProgressLocation = { Notification: 15 };
+export const ConfigurationTarget = { Global: 1, Workspace: 2, WorkspaceFolder: 3 };
+const configurationChanges = new EventEmitter<vscode.ConfigurationChangeEvent>();
+
+export function cancelProgress(): void {
+  progressToken.isCancellationRequested = true;
+  progressCancellation.fire();
+}
+
+export async function fireConfigurationChange(...sections: string[]): Promise<void> {
+  await configurationChanges.fireAsync({ affectsConfiguration: section => sections.some(changed =>
+    changed === section || changed.startsWith(section + '.') || section.startsWith(changed + '.')) });
+}
+
+export class TestOutputChannel {
+  public lines: string[] = [];
+  public shown = false;
+  public disposed = false;
+  public appendLine(value: string): void { this.lines.push(value); }
+  public show(): void { this.shown = true; }
+  public dispose(): void { this.disposed = true; }
+}
+
+export class TestTreeView<T> {
+  public selection: readonly T[] = [];
+  public message: string | undefined;
+  public badge?: { value: number; tooltip: string };
+  public disposed = false;
+  public constructor(public readonly provider: vscode.TreeDataProvider<T>) {}
+  public async reveal(): Promise<void> {}
+  public dispose(): void { this.disposed = true; }
+}
 
 export class TestQuickPick<T extends { label: string }> {
   public title = '';
@@ -130,6 +175,24 @@ export class TestQuickPick<T extends { label: string }> {
 
 export const window = {
   quickPickAction: '',
+  createOutputChannel(): TestOutputChannel {
+    const output = new TestOutputChannel();
+    outputChannels.push(output);
+    return output;
+  },
+  createTreeView<T>(_id: string, options: { treeDataProvider: vscode.TreeDataProvider<T> }): TestTreeView<T> {
+    const tree = new TestTreeView(options.treeDataProvider);
+    treeViews.push(tree);
+    return tree;
+  },
+  async withProgress<T>(options: unknown, task: (
+    progress: { report: (value: { increment?: number; message?: string }) => void },
+    token: typeof progressToken,
+  ) => Thenable<T>): Promise<T> {
+    progressRequests.push(options);
+    return task({ report: value => progressReports.push(value) }, progressToken);
+  },
+  async showOpenDialog(): Promise<Array<{ fsPath: string }> | undefined> { return openDialogResults.shift(); },
   async showQuickPick<T extends { label: string; action?: string; filter?: string }>(items: T[], options?: unknown) {
     quickPickRequests.push({ items, options });
     return items.find(item => (item.action ?? item.filter ?? item.label) === window.quickPickAction);
@@ -166,6 +229,7 @@ export const window = {
 };
 
 export const workspace = {
+  onDidChangeConfiguration: configurationChanges.event,
   getConfiguration(section: string): {
     get: <T>(key: string, defaultValue?: T) => T | undefined;
     update: (key: string, value: unknown) => Promise<void>;
@@ -227,4 +291,12 @@ export function resetVscodeMock(): void {
   inputBoxRequests.length = 0;
   inputBoxValues.length = 0;
   quickPickRequests.length = 0;
+  openDialogResults.length = 0;
+  outputChannels.length = 0;
+  treeViews.length = 0;
+  progressReports.length = 0;
+  progressRequests.length = 0;
+  progressToken.isCancellationRequested = false;
+  progressCancellation.dispose();
+  configurationChanges.dispose();
 }

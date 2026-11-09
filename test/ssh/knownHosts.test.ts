@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadSshHosts, type SshEnvironment } from '../../src/ssh/config.js';
 import { buildInteractiveSshArguments, buildSshArguments } from '../../src/ssh/runner.js';
 import type { MonitorSettings } from '../../src/types.js';
+import { makeSettings } from '../helpers/fixtures.js';
 
 vi.mock('node:fs', async importOriginal => {
   const actual = await importOriginal<typeof fs>();
@@ -17,15 +18,9 @@ vi.mock('node:fs', async importOriginal => {
   };
 });
 
-const settings: MonitorSettings = {
-  sshConfigPath: '', remoteSshConfigFile: '', knownHostsPath: '', sshExecutablePath: '',
-  connectTimeoutSeconds: 8, exporterProbeTimeoutSeconds: 2, npuSmiTimeoutSeconds: 10,
-  maxConcurrentHosts: 8, excludedHosts: [], pollIntervalSeconds: 180,
-  autoRefreshAllHosts: false, idleHistoryRetentionDays: 7, idleScope: 'allCards',
-  idleRequireNoProcesses: true, idleUtilizationThresholdPercent: 1, idleConsecutiveChecks: 1,
-  devContainersEnabled: false, devContainersTimeoutSeconds: 5,
-  containerFilterMode: 'devContainers', containerWorkspacePaths: [], containerWorkspaceFile: '',
-};
+const settings = makeSettings({
+  autoRefreshAllHosts: false, idleScope: 'allCards', devContainersEnabled: false,
+});
 const configText = 'Host alpha\n  HostName 192.0.2.1\n  User root\n';
 const directories: string[] = [];
 

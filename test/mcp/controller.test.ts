@@ -4,12 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { McpController } from '../../src/mcp/controller.js';
 import { NpuTreeProvider } from '../../src/ui/treeProvider.js';
 import { McpNode } from '../../src/ui/nodes.js';
-import type { MonitorService } from '../../src/monitorService.js';
+import { fixture } from './fixtures.js';
 import { clipboardFailures, clipboardWrites, configurationValues, errorMessages, resetVscodeMock, window, EventEmitter } from '../mocks/vscode.js';
 
 const http = vi.hoisted(() => ({ start: vi.fn(async () => {}), stop: vi.fn(async () => {}) }));
 vi.mock('../../src/mcp/server.js', () => ({ MonitorHttpServer: class { start = http.start; stop = http.stop; } }));
-const service = { getHostPreference: () => ({ favorite: false, note: '' }), refreshAliases: vi.fn(async () => {}), getRecords: () => [], getRecord: () => undefined, scanAliases: vi.fn(async () => {}), scanContainerAliases: vi.fn(async () => {}), listHostImages: vi.fn(async () => ({ host: "", collectedAt: 0, state: 'ready', images: [] })), getIdleHistory: (alias: string) => ({ alias, retentionDays: 7, cards: [] }), getIdleCandidates: () => [], onDidChange: new EventEmitter<void>().event };
+const service = { ...fixture([]).service, onDidChange: new EventEmitter<void>().event };
 const secrets = new Map<string, string>();
 function controller() {
   return new McpController({ secrets: { get: async (k: string) => secrets.get(k), store: async (k: string, v: string) => { secrets.set(k, v); } } } as unknown as vscode.ExtensionContext,
@@ -28,12 +28,24 @@ describe('MCP panel and lifecycle', () => {
     configurationValues.set('npuMonitor.mcp.enabled', false); await c.configure();
     expect(c.state).toBe('Disabled'); c.dispose();
   });
+  it('stops a pending startup when disposed', async () => {
+    configurationValues.set('npuMonitor.mcp.enabled', true);
+    let completeStartup!: () => void;
+    http.start.mockImplementationOnce(() => new Promise<void>(resolve => { completeStartup = resolve; }));
+    const c = controller();
+    const pending = c.configure();
+    await vi.waitFor(() => expect(http.start).toHaveBeenCalledOnce());
+    c.dispose();
+    completeStartup();
+    await pending;
+    await vi.waitFor(() => expect(http.stop).toHaveBeenCalledTimes(2));
+  });
   it('shows an occupied port without disrupting the monitor', async () => {
     configurationValues.set('npuMonitor.mcp.enabled', true);
     http.start.mockRejectedValueOnce(Object.assign(new Error('hidden'), { code: 'EADDRINUSE' }));
     const c = controller(); await c.configure();
     expect(c.state).toBe('MCP port is already in use');
-    const provider = new NpuTreeProvider(service as unknown as MonitorService, c);
+    const provider = new NpuTreeProvider(service, c);
     const node = provider.getChildren()[0]; expect(node).toBeInstanceOf(McpNode);
     const item = provider.getTreeItem(node!);
     expect(item.id).toBe('npu-monitor:mcp');

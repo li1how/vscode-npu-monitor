@@ -6,7 +6,6 @@ import { SshExecutionError } from '../ssh/runner.js';
 import type { SshRunner } from '../ssh/runner.js';
 import type {
   HostSnapshot,
-  HostState,
   MonitorSettings,
   ScanResult,
   SshHost,
@@ -102,13 +101,9 @@ export function parseRemoteEnvelope(stdout: string): RemoteEnvelope {
   };
 }
 
-function stateFromSshError(error: SshExecutionError): HostState {
-  return error.kind;
-}
-
 export class NpuCollector {
   public constructor(
-    private readonly runner: SshRunner,
+    private readonly runner: Pick<SshRunner, 'run'>,
     private readonly settings: MonitorSettings,
     private readonly log: (message: string) => void,
   ) {}
@@ -170,7 +165,7 @@ export class NpuCollector {
       return { snapshot, state: parsed.partial ? 'partial' : 'unknown' };
     } catch (error) {
       if (error instanceof SshExecutionError) {
-        return { state: stateFromSshError(error), error: error.message };
+        return { state: error.kind, error: error.message };
       }
       return {
         state: 'error',

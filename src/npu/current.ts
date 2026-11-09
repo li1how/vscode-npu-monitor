@@ -1,10 +1,10 @@
 import type { HostHistoryView } from './history.js';
+import { isNpuObservationCurrent } from './freshness.js';
 import type { HostRecord, MonitorSettings } from '../types.js';
 
 export function currentNpuState(record: HostRecord, history: HostHistoryView, settings: MonitorSettings, now: number) {
   const snapshot = record.snapshot;
-  const fresh = Boolean(snapshot && !record.stale && now >= snapshot.collectedAt &&
-    now - snapshot.collectedAt <= settings.pollIntervalSeconds * 2000);
+  const fresh = Boolean(snapshot && !record.stale && isNpuObservationCurrent(snapshot.collectedAt, settings, now));
   const cards = new Map(history.cards.map(card => [card.id, card]));
   const usable = fresh && record.state !== 'missingConfig' && snapshot &&
     !snapshot.partial && snapshot.devices.length > 0;

@@ -1,83 +1,12 @@
 import * as vscode from 'vscode';
 
 import { McpController } from './mcp/controller.js';
-import { MonitorService, type ScanProgress } from './monitorService.js';
-import { getSettings } from './settings.js';
-import { currentSshEnvironment, detectSshExecutablePath } from './ssh/config.js';
-import { buildInteractiveSshArguments } from './ssh/runner.js';
-import { copyContainerInfo, copyContainerSummary, openDevContainer, openSshWindow } from './ui/containerActions.js';
-import { copyHostInfo } from './ui/hostActions.js';
+import { MonitorService } from './monitorService.js';
 import { HostBrowser } from './ui/hostBrowser.js';
 import { registerHostBrowserActions } from './ui/hostBrowserActions.js';
-import { showIdleHistory } from './ui/idleHistory.js';
-import { HostNode, type ContainerNode, type MonitorNode } from './ui/nodes.js';
+import { registerHostCommands } from './ui/hostCommands.js';
+import type { MonitorNode } from './ui/nodes.js';
 import { NpuTreeProvider } from './ui/treeProvider.js';
-
-function aliasesFromSelection(
-  treeView: vscode.TreeView<MonitorNode>,
-  node?: HostNode,
-): string[] {
-  const selected = treeView.selection
-    .filter((item): item is HostNode => item instanceof HostNode)
-    .map(item => item.record.host.alias);
-  if (node && !selected.includes(node.record.host.alias)) {
-    return [node.record.host.alias];
-  }
-  return selected;
-}
-
-async function runWithProgress(
-  title: string,
-  operation: (
-    token: vscode.CancellationToken,
-    report: (progress: ScanProgress) => void,
-  ) => Promise<void>,
-): Promise<void> {
-  await vscode.window.withProgress(
-    {
-      location: vscode.ProgressLocation.Notification,
-      title,
-      cancellable: true,
-    },
-    async (progress, token) => {
-      let previous = 0;
-      await operation(token, status => {
-        const current = status.total === 0 ? 100 : status.completed / status.total * 100;
-        progress.report({
-          increment: current - previous,
-          message: status.alias + ' (' + status.completed + '/' + status.total + ')',
-        });
-        previous = current;
-      });
-    },
-  );
-}
-
-export function openSshTerminal(node?: HostNode): void {
-  if (!node) {
-    return;
-  }
-  try {
-    const settings = getSettings();
-    const environment = currentSshEnvironment(vscode.env.remoteName);
-    const terminal = vscode.window.createTerminal({
-      name: 'NPU SSH: ' + node.record.host.alias,
-      shellPath: detectSshExecutablePath(settings.sshExecutablePath, environment),
-      shellArgs: buildInteractiveSshArguments(
-        node.record.host,
-        settings.connectTimeoutSeconds,
-      ),
-    });
-    terminal.show();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    void vscode.window.showErrorMessage(vscode.l10n.t(
-      'Unable to open SSH terminal for {0}: {1}',
-      node.record.host.alias,
-      message,
-    ));
-  }
-}
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const output = vscode.window.createOutputChannel('NPU Monitor', { log: true });
@@ -85,12 +14,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   const mcp = new McpController(context, service, output);
   const browser = new HostBrowser(service, context.globalState);
   const provider = new NpuTreeProvider(service, mcp, browser);
-  const treeView = vscode.window.createTreeView('npuMonitor.hosts', {
-    treeDataProvider: provider,
-    canSelectMany: true,
-    showCollapseAll: true,
+  const treeView = vscode.window.createTreeView<MonitorNode>('npuMonitor.hosts', {
+    treeDataProvider: provider, canSelectMany: true, showCollapseAll: true,
   });
-
   const updateBadge = (): void => {
     const subscribed = service.getRecords().filter(record => record.subscribed).length;
     treeView.badge = subscribed > 0
@@ -98,121 +24,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       : undefined;
   };
   context.subscriptions.push(
-    output,
-    mcp,
+    output, mcp, service, provider, browser, treeView,
     mcp.onDidChange(() => provider.refresh()),
     vscode.commands.registerCommand('npuMonitor.mcpMenu', () => mcp.showMenu()),
-    service,
-    provider,
-    browser,
-    treeView,
     ...registerHostBrowserActions(browser, treeView),
+    ...registerHostCommands(service, treeView, output),
     service.onDidChange(updateBadge),
-    vscode.commands.registerCommand('npuMonitor.scanAll', async () => {
-      await runWithProgress(
-        vscode.l10n.t('Scanning all NPU hosts'),
-        (token, report) => service.scanAll(token, report),
-      );
-    }),
-    vscode.commands.registerCommand('npuMonitor.showIdleHistory', async (node?: HostNode) => {
-      let alias = node?.record.host.alias;
-      if (!alias) {
-        const selected = await vscode.window.showQuickPick(service.getRecords().map(record => ({
-          label: record.host.alias,
-        })), { placeHolder: vscode.l10n.t('Choose a host for idle history') });
-        alias = selected?.label;
-      }
-      if (alias) showIdleHistory(service, alias);
-    }),
-    vscode.commands.registerCommand('npuMonitor.reloadConfig', async () => {
-      await service.reloadConfig();
-    }),
-    vscode.commands.registerCommand('npuMonitor.scanHost', async (node?: HostNode) => {
-      const aliases = aliasesFromSelection(treeView, node);
-      if (aliases.length === 0 && node) {
-        aliases.push(node.record.host.alias);
-      }
-      if (aliases.length === 0) {
-        return;
-      }
-      await runWithProgress(
-        vscode.l10n.t('Scanning selected NPU hosts'),
-        (token, report) => service.scanAliases(aliases, token, report),
-      );
-    }),
-    vscode.commands.registerCommand('npuMonitor.scanSelected', async (node?: HostNode) => {
-      const aliases = aliasesFromSelection(treeView, node);
-      if (aliases.length === 0) {
-        void vscode.window.showInformationMessage(
-          vscode.l10n.t('Select one or more hosts first.'),
-        );
-        return;
-      }
-      await runWithProgress(
-        vscode.l10n.t('Scanning selected NPU hosts'),
-        (token, report) => service.scanAliases(aliases, token, report),
-      );
-    }),
-    vscode.commands.registerCommand('npuMonitor.subscribeHost', async (node?: HostNode) => {
-      if (node) {
-        await service.subscribe(node.record.host.alias);
-      }
-    }),
-    vscode.commands.registerCommand('npuMonitor.unsubscribeHost', async (node?: HostNode) => {
-      if (node) {
-        await service.unsubscribe(node.record.host.alias);
-      }
-    }),
-    vscode.commands.registerCommand('npuMonitor.openSshTerminal', openSshTerminal),
-    vscode.commands.registerCommand('npuMonitor.openSshWindow', openSshWindow),
-    vscode.commands.registerCommand('npuMonitor.copyHostInfo', (node?: MonitorNode) =>
-      copyHostInfo(treeView.selection, node)),
-    vscode.commands.registerCommand('npuMonitor.copyContainerInfo', (node?: MonitorNode) =>
-      copyContainerInfo(treeView.selection, node)),
-    vscode.commands.registerCommand('npuMonitor.copyContainerSummary', (node?: MonitorNode) =>
-      copyContainerSummary(treeView.selection, node)),
-    vscode.commands.registerCommand('npuMonitor.openDevContainer', (node?: ContainerNode) =>
-      openDevContainer(node, async alias => {
-        await service.scanAliases([alias]);
-        return service.getRecord(alias);
-      })),
-    vscode.commands.registerCommand('npuMonitor.selectSshConfig', async () => {
-      const selected = await vscode.window.showOpenDialog({
-        canSelectFiles: true,
-        canSelectFolders: false,
-        canSelectMany: false,
-        title: vscode.l10n.t('Select SSH configuration'),
-      });
-      const file = selected?.[0];
-      if (!file) {
-        return;
-      }
-      await vscode.workspace.getConfiguration('npuMonitor').update(
-        'sshConfigPath',
-        file.fsPath,
-        vscode.ConfigurationTarget.Global,
-      );
-      await service.reloadConfig();
-    }),
-    vscode.commands.registerCommand('npuMonitor.openSettings', async () => {
-      await vscode.commands.executeCommand(
-        'workbench.action.openSettings',
-        '@ext:local.vscode-npu-monitor',
-      );
-    }),
-    vscode.commands.registerCommand('npuMonitor.showOutput', () => output.show()),
     vscode.workspace.onDidChangeConfiguration(async event => {
-      if (event.affectsConfiguration('npuMonitor.mcp')) {
-        await mcp.configure();
-      }
-      if (event.affectsConfiguration('npuMonitor') ||
-        event.affectsConfiguration('remote.SSH.configFile')) {
+      if (event.affectsConfiguration('npuMonitor.mcp')) await mcp.configure();
+      if (event.affectsConfiguration('npuMonitor') || event.affectsConfiguration('remote.SSH.configFile')) {
         await service.reloadConfig(false);
         service.restartTimer();
       }
     }),
   );
-
   const initialScan = service.initialize();
   void initialScan.catch(error => output.appendLine('Initial scan failed: ' + String(error)));
   await mcp.configure();

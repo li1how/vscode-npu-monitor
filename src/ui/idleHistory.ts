@@ -4,16 +4,9 @@ import * as vscode from 'vscode';
 
 import { HISTORY_BUCKET_MS, type HistoryState, type HostHistoryView } from '../npu/history.js';
 import type { MonitorService } from '../monitorService.js';
+import { formatDuration } from './formatters.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-export function formatDuration(milliseconds: number): string {
-  const minutes = Math.max(0, Math.floor(milliseconds / 60000));
-  if (minutes < 60) return vscode.l10n.t('{0} min', minutes);
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return vscode.l10n.t('{0} h {1} min', hours, minutes % 60);
-  return vscode.l10n.t('{0} d {1} h', Math.floor(hours / 24), hours % 24);
-}
 
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, character => ({
@@ -80,7 +73,7 @@ section{overflow-x:auto}.row{display:flex;align-items:center;margin:3px 0}.name{
 <ul>${summary}</ul><div class="legend">${legend}</div>${days.join('')}</body></html>`;
 }
 
-export function showIdleHistory(service: MonitorService, alias: string): void {
+export function showIdleHistory(service: Pick<MonitorService, 'getIdleHistory' | 'onDidChange'>, alias: string): void {
   const panel = vscode.window.createWebviewPanel(
     'npuMonitor.idleHistory', vscode.l10n.t('Idle history: {0}', alias),
     vscode.ViewColumn.Active, { enableScripts: false },
