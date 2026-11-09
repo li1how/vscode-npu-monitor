@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Add `npm run docs:capture` to regenerate bilingual README screenshots and animation from the current UI with isolated synthetic data.
 - Simplify internal commands, selection, freshness and MCP types; remove unused collectors, expand execution and activation tests, and move development and release instructions into bilingual contributing guides.
 - Update development minimatch to 11.0.5 and glob to 14.0.4 to fix the globparts amplification advisory (GHSA-g3hv-75wg-m249).
 - Organize MCP tools around resource overview, filtered host discovery, section-specific details, historical evidence and explicit scoped refresh. Replace previous tools with bounded, paginated results and shared read-only resource state.

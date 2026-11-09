@@ -25,7 +25,12 @@ The first automatic scan collects NPU and container data from all configured hos
 Periodic scans refresh NPU data only; subscribed hosts receive idle notifications.
 Manual scans refresh both data types without changing subscriptions.
 
-![Usage demo](media/demo.gif)
+Browse hosts, expand NPU and container details, filter idle candidates, and find a
+host across the full list:
+
+![Browse hosts, filter idle NPUs, and find a host hidden by the active filter](media/host-search-and-filter.gif)
+
+The animation and screenshots below use synthetic demonstration data.
 
 ## Requirements
 
@@ -74,6 +79,11 @@ WSL Extension Host. For a WSL workspace, select **Install in WSL** in VS Code.
 9. Use a container's copy icon for **Copy Summary**, or the context menu for
    **Copy Full Information**. Both support multiple selected containers.
 
+An expanded host shows per-card utilization, HBM, temperature, process count and
+observed idle time, followed by its Dev Containers:
+
+![NPU and Dev Container details, with both idle and busy cards](media/monitoring.png)
+
 Startup and manual scans collect NPU data first, followed by read-only Docker queries. Dev Containers
 are shown by default and use the configured project name when available. Failed
 scans retain the last successful data with a **Stale** marker. Idle history is stored
@@ -111,6 +121,14 @@ when opening a container.
 - Search, preferences and filters only use cached data. Cache updates and NPU expiry
   update the view without starting SSH queries or changing subscriptions. **Scan All Hosts**
   always scans all configured hosts, including those hidden by a filter.
+
+### Idle history
+
+Open a host's history icon to compare per-card timelines, newest day first.
+Green means idle, yellow means busy, striped cells contain mixed observations,
+and gray means unknown. Missing observations do not establish continuous idle time.
+
+![Per-NPU idle history with idle, busy, mixed and unknown observations](media/idle-history.png)
 
 ### MCP access
 
@@ -221,4 +239,5 @@ do not read its contents. Opening reports an error if the configured file is mis
 ## Development
 
 See the [development guide](CONTRIBUTING.md) for setup, project structure, checks
-and releases.
+and releases. Run `npm run docs:capture` to
+[refresh the README animation and screenshots](CONTRIBUTING.md#refresh-readme-images).
