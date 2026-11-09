@@ -4,15 +4,16 @@ import { createServer, type Server } from 'node:http';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 
 import type { MonitorSettings } from '../types.js';
-import { createMonitorMcp, type MonitorReader } from './tools.js';
+import { createMonitorMcp } from './tools.js';
 import { SnapshotPages } from './results.js';
+import type { MonitorMcpService } from './types.js';
 
 export class MonitorHttpServer {
   private server?: Server;
   private readonly connections = new Set<() => Promise<void>>();
   private pages = new SnapshotPages();
 
-  public constructor(private readonly service: MonitorReader, private readonly settings: () => MonitorSettings) {}
+  public constructor(private readonly service: MonitorMcpService, private readonly settings: () => MonitorSettings) {}
 
   public async start(port: number, token: string): Promise<void> {
     if (!token) throw new Error('Missing MCP token');

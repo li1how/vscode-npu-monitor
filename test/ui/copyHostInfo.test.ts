@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs';
-
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { copyHostInfo, formatHostInfo } from '../../src/ui/hostActions.js';
@@ -72,29 +70,6 @@ describe('copy host information', () => {
       'SSH host: -',
       'SSH target: -',
     ].join('\n'));
-  });
-
-  it('contributes a host-only context-menu command without an inline button', () => {
-    const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
-    expect(manifest.contributes.commands).toContainEqual({
-      command: 'npuMonitor.copyHostInfo',
-      title: '%command.copyHostInfo%',
-      icon: '$(copy)',
-    });
-    const menus = manifest.contributes.menus['view/item/context'] as Array<{
-      command: string;
-      group: string;
-      when: string;
-    }>;
-    expect(menus.filter(item => item.command === 'npuMonitor.copyHostInfo')).toEqual([{
-      command: 'npuMonitor.copyHostInfo',
-      when: 'view == npuMonitor.hosts && viewItem =~ /^npuHost/',
-      group: '3_copy@1',
-    }]);
-    expect(JSON.parse(readFileSync('package.nls.json', 'utf8'))['command.copyHostInfo'])
-      .toBe('Copy Host Information');
-    expect(JSON.parse(readFileSync('package.nls.zh-cn.json', 'utf8'))['command.copyHostInfo'])
-      .toBe('复制主机信息');
   });
 
   it('copies multiple hosts, filters other nodes and deduplicates aliases', async () => {

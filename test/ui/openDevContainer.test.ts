@@ -180,7 +180,8 @@ describe('open Dev Container in a new window', () => {
 
   it('only exposes the open button for running containers with a successful fresh snapshot', () => {
     const { record, container, node } = fixture();
-    const provider = new NpuTreeProvider({ onDidChange: () => ({ dispose() {} }) } as never);
+    const provider = new NpuTreeProvider({ onDidChange: () => ({ dispose() {} }),
+      getRecords: () => [record], getIdleHistory: alias => ({ alias, retentionDays: 7, cards: [] }) });
     expect(provider.getTreeItem(node).contextValue).toBe('npuDevContainerRunning');
     container.state = 'exited';
     expect(provider.getTreeItem(node).contextValue).toBe('npuDevContainer');

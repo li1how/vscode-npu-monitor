@@ -1,13 +1,26 @@
-import { HISTORY_BUCKET_MS } from '../npu/history.js';
+import { HISTORY_BUCKET_MS, type HistoryState } from '../npu/history.js';
 import type { MonitorSettings } from '../types.js';
-import type { MonitorReader, PageInput } from './queries.js';
+import type { PageInput } from './queries.js';
 import { queryKey } from './queries.js';
 import { QueryError, type SnapshotPages, type QueryResult } from './results.js';
+import type { MonitorReader } from './types.js';
 
 export interface HistoryQuery extends PageInput {
   host: string; cards?: string[]; from?: number; to?: number; mode: 'summary' | 'buckets';
 }
 
+type HistoryBucket = { cardId: string; start: number; state: HistoryState };
+type HistorySummary = { cardId: string; counts: Record<HistoryState, number>; unobservedBuckets: number;
+  observedBuckets: number; coverageRatio: number;
+  current: { state: Exclude<HistoryState, 'mixed'>; observedAt: number | null; idleSince: number | null } };
+type HistoryData = {
+  host: string; mode: HistoryQuery['mode']; range: { from: number; to: number; bucketMs: number };
+  retentionDays: number; totalCards: number;
+};
+
+export function getHistory<Mode extends HistoryQuery['mode']>(
+  service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: HistoryQuery & { mode: Mode },
+): QueryResult<HistoryData & (Mode extends 'summary' ? { cards: HistorySummary[] } : { buckets: HistoryBucket[] })>;
 export function getHistory(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: HistoryQuery): QueryResult {
   return pages.page(queryKey('get_history', input), input.limit, input.cursor, asOf => {
     const record = service.getRecord(input.host);
@@ -25,7 +38,7 @@ export function getHistory(service: MonitorReader, settings: MonitorSettings, pa
     if (input.cards?.some(id => !ids.includes(id))) throw new QueryError('UNKNOWN_CARD', 'Unknown card ID.');
     const selected = ids.filter(id => !input.cards || input.cards.includes(id));
     const totalBuckets = Math.ceil(to / HISTORY_BUCKET_MS) - Math.floor(from / HISTORY_BUCKET_MS);
-    const rows: unknown[] = selected.flatMap((id): unknown[] => {
+    const rows = selected.flatMap((id): Array<HistorySummary | HistoryBucket> => {
       const card = byId.get(id);
       const bins = (card?.bins ?? []).filter(([start]) => start < to && start + HISTORY_BUCKET_MS > from);
       if (input.mode === 'buckets') return bins.map(([start, state]) => ({ cardId: id, start, state }));

@@ -1,40 +1,15 @@
 import { describe, expect, it } from 'vitest';
 
-import { NpuCollector } from '../../src/npu/collector.js';
+import { buildRemoteScanCommand, NpuCollector, parseRemoteEnvelope } from '../../src/npu/collector.js';
 import { SshExecutionError } from '../../src/ssh/runner.js';
-import type { MonitorSettings, SshHost } from '../../src/types.js';
+import { makeHost, makeSettings } from '../helpers/fixtures.js';
 
-const settings: MonitorSettings = {
-  sshConfigPath: '',
-  remoteSshConfigFile: '',
-  knownHostsPath: '',
-  sshExecutablePath: '',
-  connectTimeoutSeconds: 8,
-  exporterProbeTimeoutSeconds: 2,
-  npuSmiTimeoutSeconds: 10,
-  maxConcurrentHosts: 6,
-  excludedHosts: [],
-  pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7,
-  idleScope: 'allCards',
-  idleRequireNoProcesses: true,
-  idleUtilizationThresholdPercent: 1,
-  devContainersEnabled: false,
-  devContainersTimeoutSeconds: 5,
-  containerFilterMode: 'devContainers',
-  containerWorkspacePaths: [],
-  containerWorkspaceFile: '',
-  idleConsecutiveChecks: 1,
-};
+const settings = makeSettings({
+  maxConcurrentHosts: 6, pollIntervalSeconds: 60, autoRefreshAllHosts: false,
+  idleScope: 'allCards', devContainersEnabled: false,
+});
 
-const host: SshHost = {
-  alias: 'alpha',
-  hostname: '10.0.0.1',
-  user: 'root',
-  port: 22,
-  identityFiles: [],
-  configPath: '/tmp/config',
-  useAlias: false,
-};
+const host = makeHost({ configPath: '/tmp/config', useAlias: false });
 
 const NpuSmiFixture = [
   '+------------------------------------------------------------------------------------------------------------------+',
@@ -93,7 +68,7 @@ function wrapInEnvelope(source: string, data: string): string {
 describe('NpuCollector scan', () => {
   it('returns a snapshot from npu-smi output', async () => {
     const runner = makeRunner([{ stdout: wrapInEnvelope('npu-smi', NpuSmiFixture) }]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('unknown');
     expect(result.snapshot?.source).toBe('npu-smi');
@@ -103,7 +78,7 @@ describe('NpuCollector scan', () => {
 
   it('returns a snapshot from exporter output', async () => {
     const runner = makeRunner([{ stdout: wrapInEnvelope('exporter|http://127.0.0.1:8080/metrics', ExporterFixture) }]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('unknown');
     expect(result.snapshot?.source).toBe('exporter');
@@ -113,7 +88,7 @@ describe('NpuCollector scan', () => {
 
   it('returns unsupported state when source is none', async () => {
     const runner = makeRunner([{ stdout: wrapInEnvelope('none', 'No usable NPU tool found.') }]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('unsupported');
     expect(result.snapshot).toBeUndefined();
@@ -122,7 +97,7 @@ describe('NpuCollector scan', () => {
 
   it('maps SSH timeout error to timeout state', async () => {
     const runner = makeRunner([new SshExecutionError('timeout', 'Connection timed out', '')]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('timeout');
     expect(result.snapshot).toBeUndefined();
@@ -130,21 +105,21 @@ describe('NpuCollector scan', () => {
 
   it('maps SSH auth error to authError state', async () => {
     const runner = makeRunner([new SshExecutionError('authError', 'Permission denied', '')]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('authError');
   });
 
   it('maps SSH unreachable error to unreachable state', async () => {
     const runner = makeRunner([new SshExecutionError('unreachable', 'No route to host', '')]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('unreachable');
   });
 
   it('returns error state for unexpected exceptions', async () => {
     const runner = makeRunner([new Error('Unexpected failure')]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('error');
     expect(result.error).toBe('Unexpected failure');
@@ -158,7 +133,7 @@ describe('NpuCollector scan', () => {
       { stdout: badExporterOutput },
       { stdout: npuSmiFallbackOutput },
     ]);
-    const collector = new NpuCollector(runner as never, settings, msg => logs.push(msg));
+    const collector = new NpuCollector(runner, settings, msg => logs.push(msg));
     const result = await collector.scan(host);
     expect(result.snapshot?.source).toBe('npu-smi');
     expect(logs.some(l => l.includes('Exporter parsing failed'))).toBe(true);
@@ -177,9 +152,70 @@ describe('NpuCollector scan', () => {
       '| NPU ID                    | Process id    | Process name       | Process memory(MB)    |',
     ].join('\n');
     const runner = makeRunner([{ stdout: wrapInEnvelope('npu-smi', partialSmi) }]);
-    const collector = new NpuCollector(runner as never, settings, () => { /* noop */ });
+    const collector = new NpuCollector(runner, settings, () => { /* noop */ });
     const result = await collector.scan(host);
     expect(result.state).toBe('partial');
     expect(result.snapshot?.partial).toBe(true);
+  });
+});
+
+describe('NPU scan command and protocol', () => {
+  it('uses a cheap exact-name preflight and excludes expensive discovery', () => {
+    const command = buildRemoteScanCommand(settings);
+    expect(command).toContain('$2=="npu-exporter" || $2=="npu_exporter"');
+    expect(command).toContain('command -v npu-smi');
+    expect(command).not.toMatch(/systemctl|find \/|docker|kubectl|ss -/);
+    expect(command).toContain(' - now + probe_started');
+  });
+
+  it('parses framed remote output', () => {
+    const envelope = parseRemoteEnvelope([
+      '__NPU_MONITOR_CAPS_BEGIN__',
+      '__NPU_MONITOR_CAPS_END__',
+      '__NPU_MONITOR_SOURCE__npu-smi',
+      '__NPU_MONITOR_DATA_BEGIN__',
+      'npu-smi data',
+      '__NPU_MONITOR_DATA_END__',
+    ].join('\n'));
+    expect(envelope).toEqual({
+      source: 'npu-smi',
+      endpoint: undefined,
+      data: 'npu-smi data',
+    });
+  });
+
+  it('parses exporter source with endpoint URL from remote output', () => {
+    const envelope = parseRemoteEnvelope([
+      '__NPU_MONITOR_SOURCE__exporter|http://127.0.0.1:8080/metrics',
+      '__NPU_MONITOR_DATA_BEGIN__',
+      'metrics here',
+      '__NPU_MONITOR_DATA_END__',
+    ].join('\n'));
+    expect(envelope).toEqual({
+      source: 'exporter',
+      endpoint: 'http://127.0.0.1:8080/metrics',
+      data: 'metrics here',
+    });
+  });
+
+  it('throws when remote output has no source marker', () => {
+    expect(() => parseRemoteEnvelope('no marker here')).toThrow(
+      'did not contain a source marker',
+    );
+  });
+
+  it('throws when remote output has an unknown source', () => {
+    expect(() => parseRemoteEnvelope([
+      '__NPU_MONITOR_SOURCE__badvalue',
+      '__NPU_MONITOR_DATA_BEGIN__',
+      'data',
+      '__NPU_MONITOR_DATA_END__',
+    ].join('\n'))).toThrow('unknown source');
+  });
+
+  it('throws when remote output has no data section', () => {
+    expect(() => parseRemoteEnvelope('__NPU_MONITOR_SOURCE__npu-smi\nno data markers')).toThrow(
+      'did not contain a complete data section',
+    );
   });
 });

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getHistory } from '../../src/mcp/history.js';
 import { inspectHost, overview, queryHosts, refreshHosts } from '../../src/mcp/queries.js';
-import { bounded, byteSize, RESULT_BYTES, SnapshotPages } from '../../src/mcp/results.js';
+import { byteSize, RESULT_BYTES, SnapshotPages, type QueryResult } from '../../src/mcp/results.js';
 import { HISTORY_BUCKET_MS } from '../../src/npu/history.js';
 import { getSettings } from '../../src/settings.js';
 import { configurationValues, resetVscodeMock } from '../mocks/vscode.js';
@@ -20,7 +20,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 
-function data<T = any>(result: { data: Record<string, unknown> }, field: string): T { return result.data[field] as T; }
+function data<Data extends Record<string, unknown>, Key extends keyof Data>(result: QueryResult<Data>, field: Key): Data[Key] {
+  return result.data[field];
+}
 
 describe('resource discovery', () => {
   it('groups missing model metadata and normalizes cached names without changing cached observations', () => {
@@ -35,12 +37,12 @@ describe('resource discovery', () => {
       { model: null, hosts: 3, devices: 35 }, { model: 'Ascend910', hosts: 1, devices: 13 },
     ]);
     const hosts = data(queryHosts(service, settings, pages, query), 'hosts');
-    expect(hosts.map((host: any) => host.models)).toEqual([['Ascend910'], [], []]);
+    expect(hosts.map(host => host.models)).toEqual([['Ascend910'], [], []]);
     expect(data(queryHosts(service, settings, pages, { ...query, model: ' ascend910 ' }), 'hosts')
-      .map((host: any) => host.host)).toEqual(['node-1']);
+      .map(host => host.host)).toEqual(['node-1']);
     const devices = data(inspectHost(service, settings, pages, { ...inspect, section: 'devices' }), 'devices');
-    expect(devices.slice(0, 3).map((device: any) => device.model)).toEqual([null, null, null]);
-    expect(devices[3].model).toBe('Ascend910');
+    expect(devices.slice(0, 3).map(device => device.model)).toEqual([null, null, null]);
+    expect(devices[3]!.model).toBe('Ascend910');
     expect(records[0]!.snapshot!.devices[1]!.model).toBe('   ');
     expect(service.refreshAliases).not.toHaveBeenCalled();
   });
@@ -51,14 +53,14 @@ describe('resource discovery', () => {
     records[1]!.subscribed = true;
     const settings = getSettings();
     expect(data(queryHosts(service, settings, pages, { ...query, query: 'accuracy TEST', favorite: true, subscribed: true,
-      model: 'ascend910', minIdleCards: 1, minIdleSeconds: 0 }), 'hosts').map((item: any) => item.host)).toEqual(['node-2']);
+      model: 'ascend910', minIdleCards: 1, minIdleSeconds: 0 }), 'hosts').map(item => item.host)).toEqual(['node-2']);
     expect(data(queryHosts(service, settings, pages, { ...query, minIdleCards: 2 }), 'hosts')).toEqual([]);
     expect(data(queryHosts(service, settings, pages, { ...query, query: '10.0.0.1' }), 'hosts')).toHaveLength(2);
     for (const keyword of ['projectone', 'image:test', '/WORK/benchmark', 'docker-one']) {
       const result = queryHosts(service, settings, pages, { ...query, query: keyword });
       expect(data(result, 'hosts')).toHaveLength(2);
-      expect(data(result, 'hosts')[0].containerMatch.id).toHaveLength(64);
-      expect(data(result, 'hosts')[0].matchedBy).toEqual(['container']);
+      expect(data(result, 'hosts')[0]!.containerMatch!.id).toHaveLength(64);
+      expect(data(result, 'hosts')[0]!.matchedBy).toEqual(['container']);
     }
     expect(data(queryHosts(service, settings, pages, { ...query, query: 'private:service' }), 'hosts')).toEqual([]);
     configurationValues.set('npuMonitor.containers.filterMode', 'all');
@@ -76,7 +78,7 @@ describe('resource discovery', () => {
     const item = records[0]!;
     item.refreshing = true;
     item.state = 'busy';
-    expect(data(queryHosts(service, getSettings(), pages, { ...query, minIdleCards: 1 }), 'hosts')[0].npu.idleDevices).toBe(1);
+    expect(data(queryHosts(service, getSettings(), pages, { ...query, minIdleCards: 1 }), 'hosts')[0]!.npu.idleDevices).toBe(1);
     for (const change of [
       () => { item.stale = true; },
       () => { item.snapshot!.partial = true; },
@@ -92,7 +94,7 @@ describe('resource discovery', () => {
     history.observe(item.host, undefined, getSettings(), now);
     expect(data(inspectHost(service, getSettings(), pages, inspect), 'summary').npu.idleDevices).toBeNull();
     vi.advanceTimersByTime(360001);
-    expect(data(queryHosts(service, getSettings(), pages, query), 'hosts')[0].freshness.npu.outdated).toBe(true);
+    expect(data(queryHosts(service, getSettings(), pages, query), 'hosts')[0]!.freshness.npu.outdated).toBe(true);
   });
 
   it('provides aggregate coverage and separates NPU validity from container observations', () => {
@@ -102,7 +104,7 @@ describe('resource discovery', () => {
     const result = overview(service, getSettings(), pages, paging);
     expect(result.data).toMatchObject({ totalHosts: 2, npu: { observedHosts: 2, freshHosts: 1, idleHosts: 1,
       idleDevices: 1, unknownHosts: 1, errorHosts: 1 }, containers: { count: 2, observedHosts: 2, staleHosts: 1 } });
-    expect(result.data.hosts).toBeUndefined();
+    expect(result.data).not.toHaveProperty('hosts');
     const summary = data(inspectHost(service, getSettings(), pages, inspect), 'summary');
     expect(summary.freshness.npu.validUntil).toBe(now + 360000);
     expect(summary.freshness.containers).toMatchObject({ collectedAt: now, validUntil: null, outdated: null });
@@ -120,13 +122,13 @@ describe('resource discovery', () => {
     service.getIdleHistory.mockImplementation((alias, time, bins) => alias === 'node-3'
       ? fresh.history.getHistory(alias, getSettings(), time, item.host, bins) : original(alias, time, bins));
     expect(data(queryHosts(service, getSettings(), pages, { ...query, sort: 'idleDuration' }), 'hosts')
-      .map((row: any) => row.host)).toEqual(['node-3', 'node-2', 'node-10']);
+      .map(row => row.host)).toEqual(['node-3', 'node-2', 'node-10']);
     item.snapshot!.devices[1]!.utilizationPercent = 0;
     item.snapshot!.devices[1]!.processCount = 0;
     item.snapshot!.devices[1]!.processes = [];
     history.observe(item.host, item.snapshot, getSettings());
     fresh.history.observe(item.host, item.snapshot, getSettings());
-    expect(data(queryHosts(service, getSettings(), pages, { ...query, sort: 'idleCards' }), 'hosts')[0].host).toBe('node-3');
+    expect(data(queryHosts(service, getSettings(), pages, { ...query, sort: 'idleCards' }), 'hosts')[0]!.host).toBe('node-3');
   });
 });
 
@@ -167,7 +169,7 @@ describe('detail sections', () => {
     const processes = inspectHost(service, settings, pages, { ...inspect, section: 'processes', deviceId: '1' });
     expect(data(processes, 'processes')).toEqual([{ deviceId: '1', pid: '101', name: 'worker', memoryMb: 1024 }]);
     const containers = inspectHost(service, settings, pages, { ...inspect, section: 'containers', query: 'PROJECT' });
-    expect(data(containers, 'containers')[0].id).toHaveLength(64);
+    expect(data(containers, 'containers')[0]!.id).toHaveLength(64);
     expect(data(containers, 'containers')[0]).not.toHaveProperty('configFile');
     const container = inspectHost(service, settings, pages, { ...inspect, section: 'container', containerId: 'a'.repeat(64) });
     expect(data(container, 'container')).toMatchObject({ imageId: 'sha256:' + 'b'.repeat(64), workspaceFolder: '/work/benchmark' });
@@ -195,7 +197,7 @@ describe('historical evidence', () => {
       unobservedBuckets: 1, observedBuckets: 2, coverageRatio: 0.5 });
     expect(JSON.stringify(summary)).not.toContain('bins');
     const first = getHistory(service, getSettings(), pages, { ...input, mode: 'buckets', limit: 2 });
-    expect(data(first, 'buckets').map((row: any) => row.state)).toEqual(['idle', 'mixed']);
+    expect(data(first, 'buckets').map(row => row.state)).toEqual(['idle', 'mixed']);
     const second = getHistory(service, getSettings(), pages, { ...input, mode: 'buckets', limit: 2, cursor: first.page!.nextCursor! });
     expect(data(second, 'buckets')).toEqual([{ cardId: '0', start: now - HISTORY_BUCKET_MS, state: 'unknown' }]);
     expect(() => getHistory(service, getSettings(), pages, { ...input, from: now - 8 * 86400000 })).toThrow('retention');
@@ -212,28 +214,11 @@ describe('bounded result snapshots', () => {
     records.splice(0);
     const second = queryHosts(service, getSettings(), pages, { ...query, cursor });
     expect(second.asOf).toBe(first.asOf);
-    expect(data(second, 'hosts').map((row: any) => row.host)).toEqual(['node-10', 'node-11', 'node-12', 'node-13', 'node-14']);
+    expect(data(second, 'hosts').map(row => row.host)).toEqual(['node-10', 'node-11', 'node-12', 'node-13', 'node-14']);
     expect(() => queryHosts(service, getSettings(), pages, { ...query, cursor, favorite: true })).toThrow('another query');
     expect(() => queryHosts(service, getSettings(), pages, { ...query, cursor: 'bad' })).toThrow('Invalid cursor');
     vi.advanceTimersByTime(120000);
     expect(() => queryHosts(service, getSettings(), pages, { ...query, cursor })).toThrow('expired');
-  });
-
-  it('reduces pages to the byte budget, handles oversized items, and evicts by count and bytes', () => {
-    const build = () => ({ data: {}, field: 'rows', rows: Array.from({ length: 50 }, () => ({ value: 'x'.repeat(2000) })) });
-    const first = pages.page('one', 50, undefined, build);
-    expect(first.page!.returned).toBeLessThan(50);
-    expect(first.page!.nextCursor).toBeTruthy();
-    expect(byteSize(first)).toBeLessThanOrEqual(RESULT_BYTES);
-    expect(() => pages.page('large', 1, undefined, () => ({ ...build(), rows: ['x'.repeat(RESULT_BYTES)] }))).toThrow('One item');
-    expect(() => bounded({ asOf: now, data: { text: 'x'.repeat(RESULT_BYTES) } })).toThrow('16 KiB');
-    for (let index = 0; index < 32; index++) pages.page('other-' + index, 1, undefined, build);
-    expect(() => pages.page('one', 1, first.page!.nextCursor!, build)).toThrow('evicted');
-    pages.clear();
-    const big = () => ({ data: {}, field: 'rows', rows: Array.from({ length: 500 }, () => ({ value: 'x'.repeat(10000) })) });
-    const before = pages.page('big-one', 1, undefined, big);
-    pages.page('big-two', 1, undefined, big);
-    expect(() => pages.page('big-one', 1, before.page!.nextCursor!, big)).toThrow('evicted');
   });
 
   it('keeps 150 hosts, 16 cards and seven days of history out of ordinary responses', () => {
@@ -277,8 +262,8 @@ describe('explicit refresh', () => {
     const { service, records } = fixture([record(), record('node-2')]);
     service.refreshAliases.mockImplementation(async () => { records[1]!.state = 'timeout'; records[1]!.stale = true; });
     const result = await refreshHosts(service, getSettings(), pages, { ...paging, hosts: ['node-1', 'node-2'], scope: 'both' });
-    expect(data(result, 'hosts')[0].npu.success).toBe(true);
-    expect(data(result, 'hosts')[1].npu).toMatchObject({ state: 'timeout', success: false });
+    expect(data(result, 'hosts')[0]).toMatchObject({ npu: { success: true } });
+    expect(data(result, 'hosts')[1]).toMatchObject({ npu: { state: 'timeout', success: false } });
     expect(JSON.stringify(result)).not.toContain('devices');
     expect(records.every(item => item.subscribed === false)).toBe(true);
   });

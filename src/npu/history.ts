@@ -3,7 +3,8 @@ import { createHash } from 'node:crypto';
 import type * as vscode from 'vscode';
 
 import { isDeviceIdle } from './idle.js';
-import type { HostRecord, HostSnapshot, MonitorSettings, SshHost } from '../types.js';
+import { isNpuObservationCurrent, npuMaxAgeMs } from './freshness.js';
+import type { HostSnapshot, MonitorSettings, SshHost } from '../types.js';
 
 const HISTORY_KEY = 'npuMonitor.idleHistory.v1';
 export const HISTORY_BUCKET_MS = 15 * 60 * 1000;
@@ -45,20 +46,6 @@ export interface HostHistoryView {
   cards: CardHistoryView[];
 }
 
-export interface IdleCandidate {
-  alias: string;
-  durationMs: number;
-  idleDevices: number;
-  deviceCount: number;
-  deviceId: string | null;
-  observedAt: number;
-  collectedAt: number;
-  ageSeconds: number;
-  maxAgeSeconds: number;
-  validUntil: number;
-  outdated: false;
-}
-
 function identity(host: SshHost): string {
   return createHash('sha256').update(JSON.stringify([
     host.alias, host.hostname, host.user, host.port, host.configPath,
@@ -97,7 +84,7 @@ function putBin(card: StoredCard, time: number, state: HistoryState): void {
 
 function currentCard(card: StoredCard, settings: MonitorSettings, now: number): boolean {
   return card.state === 'idle' && card.idleSince !== null &&
-    now >= card.observedAt && now - card.observedAt <= settings.pollIntervalSeconds * 2000;
+    isNpuObservationCurrent(card.observedAt, settings, now);
 }
 
 export class IdleHistoryStore {
@@ -139,8 +126,8 @@ export class IdleHistoryStore {
         entry.cards[id] = card;
       }
       if (now < card.observedAt) continue;
-      if (now - card.observedAt > settings.pollIntervalSeconds * 2000) {
-        putBin(card, card.observedAt + settings.pollIntervalSeconds * 2000, 'unknown');
+      if (now - card.observedAt > npuMaxAgeMs(settings)) {
+        putBin(card, card.observedAt + npuMaxAgeMs(settings), 'unknown');
         card.idleSince = null;
       }
       card.idleSince = next === 'idle'
@@ -165,47 +152,12 @@ export class IdleHistoryStore {
       cards: Object.entries(entry?.cards ?? {}).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
         .map(([id, card]) => ({
           id,
-          state: now < card.observedAt || now - card.observedAt > settings.pollIntervalSeconds * 2000
-            ? 'unknown' : card.state,
+          state: isNpuObservationCurrent(card.observedAt, settings, now) ? card.state : 'unknown',
           observedAt: card.observedAt,
           idleSince: currentCard(card, settings, now) ? card.idleSince : null,
           bins: includeBins ? card.bins.filter(([start]) => start + HISTORY_BUCKET_MS > cutoff).map(bin => [...bin] as Bin) : [],
         })),
     };
-  }
-
-  public getCandidates(records: HostRecord[], settings: MonitorSettings, now = Date.now()): IdleCandidate[] {
-    const candidates: IdleCandidate[] = [];
-    for (const record of records) {
-      const snapshot = record.snapshot;
-      if (!snapshot || snapshot.partial || record.stale || record.refreshing ||
-        now < snapshot.collectedAt || now - snapshot.collectedAt > settings.pollIntervalSeconds * 2000) continue;
-      const entry = this.data.hosts[record.host.alias];
-      if (!entry || entry.identity !== identity(record.host) || entry.policy !== policy(settings)) continue;
-      const idleCards = snapshot.devices.filter(device => {
-        const card = entry.cards[device.id];
-        return card && card.observedAt === snapshot.collectedAt && currentCard(card, settings, now);
-      });
-      if (idleCards.length === 0 || (settings.idleScope === 'allCards' && idleCards.length !== snapshot.devices.length)) continue;
-      const sorted = idleCards.map(device => ({ id: device.id, since: entry.cards[device.id]!.idleSince! }))
-        .sort((a, b) => a.since - b.since || a.id.localeCompare(b.id, undefined, { numeric: true }));
-      const since = settings.idleScope === 'allCards' ? sorted.at(-1)! : sorted[0]!;
-      candidates.push({
-        alias: record.host.alias,
-        durationMs: now - since.since,
-        idleDevices: idleCards.length,
-        deviceCount: snapshot.devices.length,
-        deviceId: settings.idleScope === 'anyCard' ? since.id : null,
-        observedAt: snapshot.collectedAt,
-        collectedAt: snapshot.collectedAt,
-        ageSeconds: (now - snapshot.collectedAt) / 1000,
-        maxAgeSeconds: settings.pollIntervalSeconds * 2,
-        validUntil: snapshot.collectedAt + settings.pollIntervalSeconds * 2000,
-        outdated: false,
-      });
-    }
-    return candidates.sort((a, b) => b.durationMs - a.durationMs ||
-      b.idleDevices - a.idleDevices || a.alias.localeCompare(b.alias, undefined, { numeric: true }));
   }
 
   public persist(settings: MonitorSettings, now = Date.now()): Promise<void> {

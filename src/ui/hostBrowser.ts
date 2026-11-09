@@ -2,11 +2,12 @@ import * as vscode from 'vscode';
 
 import { HOST_PREFERENCES_KEY, hostPreferenceKey, readHostPreference, type HostPreference } from '../hostPreferences.js';
 import { currentNpuState } from '../npu/current.js';
+import { npuMaxAgeMs } from '../npu/freshness.js';
 import type { MonitorService } from '../monitorService.js';
 import type { HostHistoryView } from '../npu/history.js';
 import { getSettings } from '../settings.js';
-import type { HostRecord, HostState } from '../types.js';
-import { formatDuration } from './idleHistory.js';
+import type { HostRecord } from '../types.js';
+import { formatDuration, hostStateText } from './formatters.js';
 
 export type HostFilter = 'all' | 'favorites' | 'subscribed' | 'idle' | 'errors' | 'stale';
 export const HOST_FILTERS: readonly HostFilter[] = ['all', 'favorites', 'subscribed', 'idle', 'errors', 'stale'];
@@ -21,19 +22,6 @@ export function hostFilterLabel(filter: HostFilter): string {
     case 'errors': return vscode.l10n.t('NPU errors');
     case 'stale': return vscode.l10n.t('Stale NPU data');
   }
-}
-
-export function hostStateText(state: HostState): string {
-  const values: Record<HostState, string> = {
-    unknown: vscode.l10n.t('Not scanned'), refreshing: vscode.l10n.t('Refreshing'),
-    idle: vscode.l10n.t('Idle'), busy: vscode.l10n.t('Busy'),
-    partial: vscode.l10n.t('Partial data'), unhealthy: vscode.l10n.t('Unhealthy'),
-    unreachable: vscode.l10n.t('Unreachable'), timeout: vscode.l10n.t('Timed out'),
-    authError: vscode.l10n.t('Authentication failed'), hostKeyError: vscode.l10n.t('Host key error'),
-    unsupported: vscode.l10n.t('No collector'), error: vscode.l10n.t('Error'),
-    missingConfig: vscode.l10n.t('Missing configuration'),
-  };
-  return values[state];
 }
 
 export interface NpuSummary {
@@ -157,10 +145,11 @@ export class HostBrowser implements vscode.Disposable {
   private scheduleExpiry(): void {
     clearTimeout(this.expiryTimer);
     const now = Date.now();
+    const maxAgeMs = npuMaxAgeMs(getSettings());
     const boundaries = this.service.getRecords().flatMap(record => {
       const snapshot = record.snapshot;
       if (!snapshot || record.stale) return [];
-      return [snapshot.collectedAt, snapshot.collectedAt + getSettings().pollIntervalSeconds * 2000 + 1]
+      return [snapshot.collectedAt, snapshot.collectedAt + maxAgeMs + 1]
         .filter(time => time > now);
     });
     if (boundaries.length) {

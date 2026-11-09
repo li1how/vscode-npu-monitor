@@ -9,8 +9,12 @@ import type { MonitorService } from '../monitorService.js';
 import { getSettings } from '../settings.js';
 import type { DevContainer, DevContainerState, HostRecord, NpuDevice } from '../types.js';
 import { McpNode, ContainerNode, DeviceNode, GroupNode, HostNode, StatusNode, type MonitorNode } from './nodes.js';
-import { type HostBrowser, hostStateText as stateText, summarizeNpu } from './hostBrowser.js';
-import { formatDuration } from './idleHistory.js';
+import { type HostBrowser, summarizeNpu } from './hostBrowser.js';
+import { formatDuration, hostStateText as stateText } from './formatters.js';
+
+type TreeService = Pick<MonitorService, 'getRecords' | 'getIdleHistory' | 'onDidChange'>;
+type McpStatus = Pick<McpController, 'state' | 'tooltip'>;
+type BrowserView = Pick<HostBrowser, 'records' | 'preference' | 'onDidChange'>;
 
 function visibleContainers(record: HostRecord): DevContainer[] {
   return filterContainers(record.devContainers?.snapshot?.containers ?? [], getSettings());
@@ -73,9 +77,9 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
   public constructor(
-    private readonly service: MonitorService,
-    private readonly mcp?: McpController,
-    private readonly browser?: HostBrowser,
+    private readonly service: TreeService,
+    private readonly mcp?: McpStatus,
+    private readonly browser?: BrowserView,
   ) {
     this.serviceSubscription = (browser ?? service).onDidChange(() => this.changeEmitter.fire(undefined));
   }
@@ -290,7 +294,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
     const item = new vscode.TreeItem('NPU ' + device.id);
     const processCount = device.processCount ?? device.processes.length;
     const now = Date.now();
-    const history = this.service.getIdleHistory(record.host.alias, now).cards.find(card => card.id === device.id);
+    const history = this.service.getIdleHistory(record.host.alias, now, false).cards.find(card => card.id === device.id);
     const idleSince = record.stale ? null : history?.idleSince ?? null;
     const details = [
       formatNumber(device.utilizationPercent, '%'),

@@ -91,7 +91,7 @@ function shellSingleQuote(value: string): string {
 }
 
 export function buildDevContainerScanCommand(workspaceFileName = ''): string {
-  const nameResolver = "'" + RESOLVE_DEV_CONTAINER_NAMES.replace(/'/g, "'\\''") + "'";
+  const nameResolver = shellSingleQuote(RESOLVE_DEV_CONTAINER_NAMES);
   const workspaceFile = shellSingleQuote(isValidWorkspaceFileName(workspaceFileName) ? workspaceFileName : '');
   return [
     'export LC_ALL=C',
@@ -244,7 +244,7 @@ export function parseDevContainerOutput(stdout: string, workspaceFileName = ''):
 }
 
 export class DevContainerCollector {
-  public constructor(private readonly runner: SshRunner, private readonly settings: MonitorSettings) {}
+  public constructor(private readonly runner: Pick<SshRunner, 'run'>, private readonly settings: MonitorSettings) {}
 
   public async scan(host: SshHost, token?: vscode.CancellationToken): Promise<DevContainerScanResult> {
     const startedAt = Date.now();

@@ -8,6 +8,7 @@ import { HostBrowser } from '../../src/ui/hostBrowser.js';
 import { findHost, registerHostBrowserActions, selectedHostRecords } from '../../src/ui/hostBrowserActions.js';
 import { HostNode, McpNode, StatusNode, type MonitorNode } from '../../src/ui/nodes.js';
 import { NpuTreeProvider } from '../../src/ui/treeProvider.js';
+import { createMemento as memory, makeHost, makeRecord } from '../helpers/fixtures.js';
 import {
   commands, configurationValues, errorMessages, EventEmitter, inputBoxValues,
   quickPicks, resetVscodeMock, window,
@@ -16,20 +17,9 @@ import {
 const now = Date.UTC(2026, 10, 9, 12);
 const browsers: HostBrowser[] = [];
 
-function memory(): vscode.Memento {
-  const values = new Map<string, unknown>();
-  return {
-    get<T>(key: string, fallback?: T): T | undefined { return (values.get(key) ?? fallback) as T | undefined; },
-    keys: () => [...values.keys()],
-    update: vi.fn(async (key: string, value: unknown) => { values.set(key, structuredClone(value)); }),
-  } as vscode.Memento;
-}
-
 function record(alias = 'node-1', state: HostState = 'unknown'): HostRecord {
-  return {
-    host: { alias, hostname: '10.20.0.1', configPath: '/tmp/config', identityFiles: [], useAlias: true },
-    state, subscribed: false, refreshing: false, stale: false, idleStreak: 0, idleNotified: false,
-  };
+  return makeRecord({ host: makeHost({ alias, hostname: '10.20.0.1', user: undefined,
+    port: undefined, useAlias: true }), state });
 }
 
 function setup(records: HostRecord[] = [], state = memory()) {
@@ -150,19 +140,18 @@ describe('cached host filters and NPU summaries', () => {
     },
   );
 
-  it('ranks any-card idle duration, card count and natural names without changing all-card candidates', async () => {
+  it('ranks idle duration, card count and natural names independently of notification scope', async () => {
     configurationValues.set('npuMonitor.idleScope', 'allCards');
-    const { browser, observed, history, records } = setup();
+    const { browser, observed } = setup();
     const newest = observed('node-1', 30000);
     const ten = observed('node-10', 60000);
     const two = observed('node-2', 60000);
     const allIdle = observed('node-20', 60000, [0, 0]);
     await browser.setFavorite([newest], true);
-    const candidates = history.getCandidates(records, getSettings());
-    expect(candidates.map(item => item.alias)).toEqual(['node-20']);
     expect(browser.records('idle')).toEqual([allIdle, two, ten, newest]);
     expect(browser.summary(two)).toMatchObject({ idleCount: 1, longestIdleMs: 60000 });
-    expect(history.getCandidates(records, getSettings())).toEqual(candidates);
+    configurationValues.set('npuMonitor.idleScope', 'anyCard');
+    expect(browser.records('idle')).toEqual([allIdle, two, ten, newest]);
   });
 
   it('rejects partial, failed and mismatched observations', () => {
@@ -235,7 +224,7 @@ describe('host tree and actions', () => {
     const { browser, service, observed } = setup();
     const item = observed('alpha');
     item.subscribed = true;
-    const provider = new NpuTreeProvider(service as never, { state: 'Disabled', tooltip: '' } as never, browser);
+    const provider = new NpuTreeProvider(service, { state: 'Disabled', tooltip: '' }, browser);
     const before = provider.getTreeItem(new HostNode(item));
     const changes = vi.fn();
     provider.onDidChangeTreeData(changes);
@@ -266,6 +255,11 @@ describe('host tree and actions', () => {
     expect(selectedHostRecords([new HostNode(alpha), new HostNode(beta)], new HostNode({ ...alpha }))).toEqual([alpha, beta]);
     expect(selectedHostRecords(selected, new HostNode(beta))).toEqual([beta]);
     expect(selectedHostRecords([new StatusNode('status')])).toEqual([]);
+    const sameAliasInAnotherConfig = { ...alpha, host: { ...alpha.host, configPath: '/tmp/other' } };
+    expect(selectedHostRecords([new HostNode(alpha)], new HostNode(sameAliasInAnotherConfig)))
+      .toEqual([sameAliasInAnotherConfig]);
+    expect(selectedHostRecords([new HostNode(alpha), new HostNode(sameAliasInAnotherConfig)]))
+      .toEqual([alpha, sameAliasInAnotherConfig]);
   });
 
   it('registers filters, multi-host favorites, notes and clearing without changing subscriptions', async () => {
@@ -273,7 +267,7 @@ describe('host tree and actions', () => {
     const beta = record('beta');
     const { browser, service } = setup([alpha, beta]);
     const view = tree([new HostNode(alpha), new HostNode(beta)]);
-    const subscriptions = registerHostBrowserActions(browser, view as never);
+    const subscriptions = registerHostBrowserActions(browser, view);
     await commands.executeCommand('npuMonitor.favoriteHost', new HostNode(alpha));
     expect(browser.records('favorites')).toEqual([alpha, beta]);
     window.quickPickAction = 'favorites';
@@ -300,7 +294,7 @@ describe('host tree and actions', () => {
   it('shows a save failure without changing persisted favorite state', async () => {
     const alpha = record();
     const { browser, state } = setup([alpha]);
-    const subscriptions = registerHostBrowserActions(browser, tree([new HostNode(alpha)]) as never);
+    const subscriptions = registerHostBrowserActions(browser, tree([new HostNode(alpha)]));
     vi.mocked(state.update).mockRejectedValueOnce(new Error('unavailable'));
     await commands.executeCommand('npuMonitor.favoriteHost', new HostNode(alpha));
     expect(errorMessages).toEqual(['Unable to save host preferences.']);
@@ -316,8 +310,8 @@ describe('host tree and actions', () => {
     await browser.setFavorite([alpha], true);
     browser.setFilter('subscribed');
     const view = tree();
-    const subscriptions = registerHostBrowserActions(browser, view as never);
-    const done = findHost(browser, view as never);
+    const subscriptions = registerHostBrowserActions(browser, view);
+    const done = findHost(browser, view);
     const picker = quickPicks[0]!;
     expect(picker.items.map(item => item.label)).toEqual(['$(star-full) node-10', 'node-2']);
     expect(picker.matchOnDescription).toBe(true);
@@ -340,7 +334,7 @@ describe('host tree and actions', () => {
     const selected = [new HostNode(alpha)];
     const view = tree(selected);
     browser.setFilter('favorites');
-    const done = findHost(browser, view as never);
+    const done = findHost(browser, view);
     const picker = quickPicks[0]!;
     expect(picker.items[0]?.description).toContain('1/2 idle NPUs');
     vi.advanceTimersByTime(120001);
@@ -356,7 +350,7 @@ describe('host tree and actions', () => {
   it('ignores a search result removed by configuration reload and reports reveal failures', async () => {
     const { browser, records, changes } = setup([record('alpha')]);
     const view = tree();
-    const done = findHost(browser, view as never);
+    const done = findHost(browser, view);
     const picker = quickPicks[0]!;
     const original = picker.items[0]!;
     records.splice(0);

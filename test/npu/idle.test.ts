@@ -1,29 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { evaluateSnapshot, isDeviceIdle } from '../../src/npu/idle.js';
-import type { HostSnapshot, MonitorSettings, NpuDevice } from '../../src/types.js';
+import type { HostSnapshot, NpuDevice } from '../../src/types.js';
+import { makeSettings } from '../helpers/fixtures.js';
 
-const settings: MonitorSettings = {
-  sshConfigPath: '',
-  remoteSshConfigFile: '',
-  knownHostsPath: '',
-  sshExecutablePath: '',
-  connectTimeoutSeconds: 8,
-  exporterProbeTimeoutSeconds: 2,
-  npuSmiTimeoutSeconds: 10,
-  maxConcurrentHosts: 6,
-  excludedHosts: [],
-  pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7,
-  idleScope: 'allCards',
-  idleRequireNoProcesses: true,
-  idleUtilizationThresholdPercent: 1,
-  devContainersEnabled: false,
-  devContainersTimeoutSeconds: 5,
-  containerFilterMode: 'devContainers',
-  containerWorkspacePaths: [],
-  containerWorkspaceFile: '',
-  idleConsecutiveChecks: 1,
-};
+const settings = makeSettings({
+  maxConcurrentHosts: 6, pollIntervalSeconds: 60, autoRefreshAllHosts: false,
+  idleScope: 'allCards', devContainersEnabled: false,
+});
 
 function device(id: string, utilizationPercent: number, processCount: number): NpuDevice {
   return {

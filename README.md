@@ -39,52 +39,16 @@ Manual scans refresh both data types without changing subscriptions.
 
 ## Build and Install
 
+Build from source with Node.js 24 LTS (`npm run vsix` includes all checks):
+
 ```bash
-npm install
-npm run check
+npm ci
 npm run vsix
 code --install-extension release/vscode-npu-monitor-0.2.5.vsix
 ```
 
 The same VSIX can be installed in either a local Windows Extension Host or a
 WSL Extension Host. For a WSL workspace, select **Install in WSL** in VS Code.
-
-For development, open this directory and press `F5` to start an Extension
-Development Host:
-
-```bash
-code .
-```
-
-## Release
-
-Pushing a `vX.Y.Z` tag that matches `package.json` automatically runs checks,
-builds the VSIX, and publishes a GitHub Release.
-[github/copilot-release-notes](https://github.com/github/copilot-release-notes)
-generates notes from merged PRs, following a [short style guide](.github/release-notes-instructions.md)
-with fixed historical examples. The tag must point to a commit on `main`;
-only stable three-part versions are supported. Use merge or squash merges and
-preserve PR numbers in commit titles.
-
-Actions uses its built-in `GITHUB_TOKEN` and requires available Copilot access and
-quota. `RELEASE_NOTES_MODEL` optionally selects a model; otherwise Copilot uses
-its default. If note generation fails, publication stops.
-
-To prepare a new version, update `package.json`, `package-lock.json`, and
-`CHANGELOG.md`:
-
-```bash
-npm version 0.2.5 --no-git-tag-version
-git add package.json package-lock.json CHANGELOG.md
-git commit -m "[Release] Prepare v0.2.5"
-git push origin main
-git tag -a v0.2.5 -m "v0.2.5"
-git push origin v0.2.5
-```
-
-The release asset name is generated from the package version, for example
-`release/vscode-npu-monitor-0.2.5.vsix`. GitHub also provides source code
-archives in zip and tar.gz formats.
 
 ## Usage
 
@@ -112,8 +76,8 @@ archives in zip and tar.gz formats.
 
 Startup and manual scans collect NPU data first, followed by read-only Docker queries. Dev Containers
 are shown by default and use the configured project name when available. Failed
-scans retain the last successful data with a **Stale** marker. Idle history starts
-with this version and is stored locally in the current extension environment; a failed,
+scans retain the last successful data with a **Stale** marker. Idle history is stored
+locally in the current extension environment; a failed,
 partial, or overdue observation never extends a continuous idle period. Changing the
 per-card idle threshold or process rule starts a new history under the new rule.
 
@@ -256,50 +220,5 @@ do not read its contents. Opening reports an error if the configured file is mis
 
 ## Development
 
-Use Node.js 24 LTS for development and packaging. Runtime types remain aligned
-with VS Code 1.100 / Node.js 20; TypeScript 6 and Vitest 4 keep the toolchain compatible.
-
-### Directory Structure
-
-```text
-src/
-  extension.ts       # Activation and command registration
-  settings.ts        # Settings
-  types.ts           # Shared data types
-  monitorService.ts  # Subscriptions, scheduling, and cached state
-  mcp/               # MCP server, cached tools and lifecycle
-  ssh/               # SSH configuration and execution
-  npu/               # NPU collection, parsing, and idle detection
-  containers/        # Container collection, metadata, and filtering
-  ui/                # Tree view and actions
-test/                # Automated tests
-  mcp/
-  ssh/
-  npu/
-  containers/
-  ui/
-  extension.test.ts
-  monitorService.test.ts
-  fixtures/          # Shared samples
-  mocks/             # Shared mocks
-scripts/             # Packaging scripts
-l10n/                # Interface translations
-media/               # Icons and demo assets
-```
-
-### Development Guidelines
-
-- Support native Windows OpenSSH and WSL `/usr/bin/ssh`; cover platform differences in tests.
-- Keep commands, settings, and documentation consistent in Chinese and English.
-- Use short English commit messages in the form `[Tag] Brief description`.
-
-### Development Commands
-
-```bash
-npm run check-types
-npm run lint
-npm test
-npm run compile
-npm run check
-npm run vsix
-```
+See the [development guide](CONTRIBUTING.md) for setup, project structure, checks
+and releases.

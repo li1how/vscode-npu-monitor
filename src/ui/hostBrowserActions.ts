@@ -1,20 +1,21 @@
 import * as vscode from 'vscode';
 
 import { HOST_FILTERS, type HostBrowser, hostFilterLabel } from './hostBrowser.js';
-import { formatSshTarget } from './hostActions.js';
+import { formatSshTarget } from './formatters.js';
 import { HostNode, type MonitorNode } from './nodes.js';
+import { contextSelection, uniqueBy } from './selection.js';
 import type { HostRecord } from '../types.js';
 
 interface HostPick extends vscode.QuickPickItem { record: HostRecord }
+type BrowserTree = Pick<vscode.TreeView<MonitorNode>, 'selection' | 'reveal' | 'message'>;
 
 export function selectedHostRecords(selection: readonly MonitorNode[], node?: MonitorNode): HostRecord[] {
-  let selected = selection.filter((item): item is HostNode => item instanceof HostNode);
-  if (node instanceof HostNode && !selected.some(item => item.record.host.alias === node.record.host.alias &&
-    item.record.host.configPath === node.record.host.configPath)) selected = [node];
-  return [...new Map(selected.map(item => [JSON.stringify([item.record.host.configPath, item.record.host.alias]), item.record])).values()];
+  const key = (item: HostNode): string => JSON.stringify([item.record.host.configPath, item.record.host.alias]);
+  return uniqueBy(contextSelection(selection, node,
+    (item): item is HostNode => item instanceof HostNode, key), key).map(item => item.record);
 }
 
-export function findHost(browser: HostBrowser, tree: vscode.TreeView<MonitorNode>): Promise<void> {
+export function findHost(browser: HostBrowser, tree: Pick<BrowserTree, 'reveal'>): Promise<void> {
   const picker = vscode.window.createQuickPick<HostPick>();
   picker.title = vscode.l10n.t('Find host');
   picker.placeholder = vscode.l10n.t('Search all hosts by alias, address or note');
@@ -66,7 +67,7 @@ export function findHost(browser: HostBrowser, tree: vscode.TreeView<MonitorNode
 
 export function registerHostBrowserActions(
   browser: HostBrowser,
-  tree: vscode.TreeView<MonitorNode>,
+  tree: BrowserTree,
 ): vscode.Disposable[] {
   const update = (): void => {
     tree.message = browser.message;

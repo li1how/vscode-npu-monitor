@@ -1,10 +1,9 @@
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { buildRemoteScanCommand, parseRemoteEnvelope } from '../../src/npu/collector.js';
 import {
   detectSshConfigPath,
   detectSshExecutablePath,
@@ -13,38 +12,33 @@ import {
   type SshEnvironment,
 } from '../../src/ssh/config.js';
 import { buildInteractiveSshArguments, buildSshArguments } from '../../src/ssh/runner.js';
-import type { MonitorSettings, SshHost } from '../../src/types.js';
+import type { SshHost } from '../../src/types.js';
+import { makeSettings } from '../helpers/fixtures.js';
 
-const settings: MonitorSettings = {
-  sshConfigPath: '',
-  remoteSshConfigFile: '',
-  knownHostsPath: '',
-  sshExecutablePath: '',
-  connectTimeoutSeconds: 8,
-  exporterProbeTimeoutSeconds: 2,
-  npuSmiTimeoutSeconds: 10,
-  maxConcurrentHosts: 6,
-  excludedHosts: [],
-  pollIntervalSeconds: 60, autoRefreshAllHosts: false, idleHistoryRetentionDays: 7,
-  idleScope: 'allCards',
-  idleRequireNoProcesses: true,
-  idleUtilizationThresholdPercent: 1,
-  devContainersEnabled: false,
-  devContainersTimeoutSeconds: 5,
-  containerFilterMode: 'devContainers',
-  containerWorkspacePaths: [],
-  containerWorkspaceFile: '',
-  idleConsecutiveChecks: 1,
-};
+const settings = makeSettings({
+  maxConcurrentHosts: 6, pollIntervalSeconds: 60, autoRefreshAllHosts: false,
+  idleScope: 'allCards', devContainersEnabled: false,
+});
+const directories: string[] = [];
 
-describe('SSH configuration and scan protocol', () => {
+afterEach(() => {
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+});
+
+function temporaryDirectory(prefix: string): string {
+  const directory = mkdtempSync(path.join(os.tmpdir(), prefix));
+  directories.push(directory);
+  return directory;
+}
+
+describe('SSH configuration and arguments', () => {
   it('converts Windows paths for WSL', () => {
     expect(windowsPathToWsl('C:\\Users\\me\\.ssh\\id_ed25519'))
       .toBe('/mnt/c/Users/me/.ssh/id_ed25519');
   });
 
   it('loads literal aliases and resolves host defaults safely', () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-'));
+    const directory = temporaryDirectory('npu-monitor-');
     const configPath = path.join(directory, 'config');
     writeFileSync(configPath, [
       'Host 10.0.0.1(A3)',
@@ -97,7 +91,7 @@ describe('SSH configuration and scan protocol', () => {
   });
 
   it('falls back to automatic SSH config detection', () => {
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-home-'));
+    const homeDir = temporaryDirectory('npu-monitor-home-');
     const sshDirectory = path.join(homeDir, '.ssh');
     const configPath = path.join(sshDirectory, 'config');
     mkdirSync(sshDirectory);
@@ -125,7 +119,7 @@ describe('SSH configuration and scan protocol', () => {
   });
 
   it('throws when no SSH config file can be found', () => {
-    const homeDir = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-empty-'));
+    const homeDir = temporaryDirectory('npu-monitor-empty-');
     const environment: SshEnvironment = {
       platform: 'linux',
       isWsl: false,
@@ -210,67 +204,8 @@ describe('SSH configuration and scan protocol', () => {
     ]);
   });
 
-  it('uses a cheap exact-name preflight and excludes expensive discovery', () => {
-    const command = buildRemoteScanCommand(settings);
-    expect(command).toContain('$2=="npu-exporter" || $2=="npu_exporter"');
-    expect(command).toContain('command -v npu-smi');
-    expect(command).not.toMatch(/systemctl|find \/|docker|kubectl|ss -/);
-    expect(command).toContain(' - now + probe_started');
-  });
-
-  it('parses framed remote output', () => {
-    const envelope = parseRemoteEnvelope([
-      '__NPU_MONITOR_CAPS_BEGIN__',
-      '__NPU_MONITOR_CAPS_END__',
-      '__NPU_MONITOR_SOURCE__npu-smi',
-      '__NPU_MONITOR_DATA_BEGIN__',
-      'npu-smi data',
-      '__NPU_MONITOR_DATA_END__',
-    ].join('\n'));
-    expect(envelope).toEqual({
-      source: 'npu-smi',
-      endpoint: undefined,
-      data: 'npu-smi data',
-    });
-  });
-
-  it('parses exporter source with endpoint URL from remote output', () => {
-    const envelope = parseRemoteEnvelope([
-      '__NPU_MONITOR_SOURCE__exporter|http://127.0.0.1:8080/metrics',
-      '__NPU_MONITOR_DATA_BEGIN__',
-      'metrics here',
-      '__NPU_MONITOR_DATA_END__',
-    ].join('\n'));
-    expect(envelope).toEqual({
-      source: 'exporter',
-      endpoint: 'http://127.0.0.1:8080/metrics',
-      data: 'metrics here',
-    });
-  });
-
-  it('throws when remote output has no source marker', () => {
-    expect(() => parseRemoteEnvelope('no marker here')).toThrow(
-      'did not contain a source marker',
-    );
-  });
-
-  it('throws when remote output has an unknown source', () => {
-    expect(() => parseRemoteEnvelope([
-      '__NPU_MONITOR_SOURCE__badvalue',
-      '__NPU_MONITOR_DATA_BEGIN__',
-      'data',
-      '__NPU_MONITOR_DATA_END__',
-    ].join('\n'))).toThrow('unknown source');
-  });
-
-  it('throws when remote output has no data section', () => {
-    expect(() => parseRemoteEnvelope('__NPU_MONITOR_SOURCE__npu-smi\nno data markers')).toThrow(
-      'did not contain a complete data section',
-    );
-  });
-
   it('excludes hosts case-insensitively when loading config', () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-excl-'));
+    const directory = temporaryDirectory('npu-monitor-excl-');
     const configPath = path.join(directory, 'config');
     writeFileSync(configPath, [
       'Host alpha',
@@ -296,7 +231,7 @@ describe('SSH configuration and scan protocol', () => {
   });
 
   it('reports a warning when an Include directive is present', () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-inc-'));
+    const directory = temporaryDirectory('npu-monitor-inc-');
     const configPath = path.join(directory, 'config');
     writeFileSync(configPath, [
       'Include ~/.ssh/other',
@@ -316,7 +251,7 @@ describe('SSH configuration and scan protocol', () => {
   });
 
   it('reports a warning when a Match section is present', () => {
-    const directory = mkdtempSync(path.join(os.tmpdir(), 'npu-monitor-match-'));
+    const directory = temporaryDirectory('npu-monitor-match-');
     const configPath = path.join(directory, 'config');
     writeFileSync(configPath, [
       'Host alpha',

@@ -1,12 +1,11 @@
 import { filterContainers } from '../containers/filter.js';
 import { currentNpuState } from '../npu/current.js';
+import { npuMaxAgeMs } from '../npu/freshness.js';
 import { normalizeNpuModel } from '../npu/model.js';
-import type { MonitorService } from '../monitorService.js';
-import type { DevContainer, HostRecord, HostState, MonitorSettings } from '../types.js';
+import type { DevContainer, HostRecord, HostState, MonitorSettings, NpuDevice, NpuProcess } from '../types.js';
 import { bounded, QueryError, type QueryResult, type SnapshotPages } from './results.js';
+import type { MonitorMcpService, MonitorReader } from './types.js';
 
-export type MonitorReader = Pick<MonitorService,
-  'getRecords' | 'getRecord' | 'getIdleHistory' | 'getHostPreference' | 'refreshAliases'>;
 export const SECTIONS = ['summary', 'devices', 'processes', 'containers', 'container', 'connection'] as const;
 export type Section = typeof SECTIONS[number];
 export interface PageInput { limit: number; cursor?: string }
@@ -40,7 +39,7 @@ export function visibleContainers(record: HostRecord, settings: MonitorSettings)
 
 export function freshness(record: HostRecord, settings: MonitorSettings, now: number) {
   return {
-    npu: observation(record.snapshot?.collectedAt, record.stale, now, settings.pollIntervalSeconds * 2000),
+    npu: observation(record.snapshot?.collectedAt, record.stale, now, npuMaxAgeMs(settings)),
     containers: observation(record.devContainers?.snapshot?.collectedAt, record.devContainers?.stale ?? false, now),
   };
 }
@@ -76,7 +75,7 @@ function natural(left: string, right: string): number {
   return left.localeCompare(right, undefined, { numeric: true });
 }
 
-export function queryHosts(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: HostQuery): QueryResult {
+export function queryHosts(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: HostQuery) {
   return pages.page(queryKey('query_hosts', input), input.limit, input.cursor, asOf => {
     const rows = service.getRecords().flatMap(record => {
       const summary = hostSummary(service, record, settings, asOf);
@@ -116,7 +115,7 @@ export function queryHosts(service: MonitorReader, settings: MonitorSettings, pa
   });
 }
 
-export function overview(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: PageInput): QueryResult {
+export function overview(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: PageInput) {
   return pages.page(queryKey('get_overview', input), input.limit, input.cursor, asOf => {
     const records = service.getRecords();
     const models = new Map<string | null, { model: string | null; hosts: number; devices: number }>();
@@ -158,6 +157,23 @@ function requireHost(service: MonitorReader, host: string): HostRecord {
   return record;
 }
 
+type InspectionFreshness = ReturnType<typeof freshness>['npu'];
+type InspectionData = {
+  summary: { summary: ReturnType<typeof hostSummary> & {
+    note: string; npuError: string | null; containerError: string | null; sections: Section[];
+  } };
+  connection: { host: string; connection: { alias: string; hostname: string; user: string | null; port: number; sshConfig: string } };
+  container: { host: string; freshness: InspectionFreshness; container: DevContainer };
+  devices: { host: string; freshness: InspectionFreshness;
+    devices: Array<Omit<NpuDevice, 'processes' | 'model'> & { model: string | null; processCount: number }> };
+  processes: { host: string; freshness: InspectionFreshness; processes: Array<NpuProcess & { deviceId: string }> };
+  containers: { host: string; freshness: InspectionFreshness;
+    containers: Array<Pick<DevContainer, 'id' | 'name' | 'state' | 'image'> & { displayName: string | null }> };
+};
+
+export function inspectHost<Selected extends Section>(
+  service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: InspectQuery & { section: Selected },
+): QueryResult<InspectionData[Selected]>;
 export function inspectHost(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages, input: InspectQuery): QueryResult {
   if (input.deviceId !== undefined && input.section !== 'processes' ||
       input.query !== undefined && input.section !== 'containers' ||
@@ -169,7 +185,7 @@ export function inspectHost(service: MonitorReader, settings: MonitorSettings, p
     if (input.cursor) throw new QueryError('INVALID_CURSOR', 'This section has no continuation.');
     const record = requireHost(service, input.host);
     const asOf = Date.now();
-    let data: Record<string, unknown>;
+    let data: InspectionData['summary' | 'connection' | 'container'];
     if (input.section === 'summary') {
       data = { summary: { ...hostSummary(service, record, settings, asOf),
         note: service.getHostPreference(input.host).note,
@@ -187,7 +203,8 @@ export function inspectHost(service: MonitorReader, settings: MonitorSettings, p
   }
   return pages.page(queryKey('inspect_host', input), input.limit, input.cursor, asOf => {
     const record = requireHost(service, input.host);
-    let rows: unknown[];
+    let rows: Array<InspectionData['devices']['devices'][number] |
+      InspectionData['processes']['processes'][number] | InspectionData['containers']['containers'][number]>;
     if (input.section === 'devices') {
       rows = (record.snapshot?.devices ?? []).map(({ processes, ...device }) => ({ ...device, model: normalizeNpuModel(device.model) ?? null,
         processCount: device.processCount ?? processes.length }));
@@ -208,28 +225,30 @@ export function inspectHost(service: MonitorReader, settings: MonitorSettings, p
   });
 }
 
-export async function refreshHosts(service: MonitorReader, settings: MonitorSettings, pages: SnapshotPages,
-  input: PageInput & { hosts: string[]; scope: 'npu' | 'containers' | 'both' }): Promise<QueryResult> {
+export async function refreshHosts(service: MonitorMcpService, settings: MonitorSettings, pages: SnapshotPages,
+  input: PageInput & { hosts: string[]; scope: 'npu' | 'containers' | 'both' }) {
   const hosts = [...new Set(input.hosts)];
   const key = queryKey('refresh_hosts', { ...input, hosts });
-  if (input.cursor) return pages.page(key, input.limit, input.cursor, () => { throw new QueryError('CURSOR_EXPIRED', 'Repeat refresh without a cursor.'); });
-  if (hosts.some(host => !service.getRecord(host) || service.getRecord(host)?.state === 'missingConfig')) {
+  if (!input.cursor && hosts.some(host => !service.getRecord(host) || service.getRecord(host)?.state === 'missingConfig')) {
     throw new QueryError('UNKNOWN_HOST', 'Unknown or unavailable SSH alias.');
   }
-  if (input.scope !== 'npu' && !settings.devContainersEnabled) throw new QueryError('CONTAINERS_DISABLED', 'Container monitoring is disabled.');
-  await service.refreshAliases(hosts, input.scope);
-  return pages.page(key, input.limit, undefined, () => ({
-    data: { scope: input.scope }, field: 'hosts',
-    rows: hosts.map(host => {
-      const record = service.getRecord(host);
-      if (!record) return { host, error: 'Host removed' };
-      const outcome = (state: string, collectedAt: number | undefined, stale: boolean) => ({
-        state, collectedAt: collectedAt ?? null, success: !stale && ['idle', 'busy', 'partial', 'unhealthy', 'ready'].includes(state),
-      });
-      return { host,
-        ...(input.scope !== 'containers' ? { npu: outcome(record.state, record.snapshot?.collectedAt, record.stale) } : {}),
-        ...(input.scope !== 'npu' ? { containers: outcome(record.devContainers?.state ?? 'unknown', record.devContainers?.snapshot?.collectedAt, record.devContainers?.stale ?? false) } : {}),
-      };
-    }),
-  }));
+  if (!input.cursor && input.scope !== 'npu' && !settings.devContainersEnabled) throw new QueryError('CONTAINERS_DISABLED', 'Container monitoring is disabled.');
+  if (!input.cursor) await service.refreshAliases(hosts, input.scope);
+  return pages.page(key, input.limit, input.cursor, () => {
+    if (input.cursor) throw new QueryError('CURSOR_EXPIRED', 'Repeat refresh without a cursor.');
+    return {
+      data: { scope: input.scope }, field: 'hosts',
+      rows: hosts.map(host => {
+        const record = service.getRecord(host);
+        if (!record) return { host, error: 'Host removed' };
+        const outcome = (state: string, collectedAt: number | undefined, stale: boolean) => ({
+          state, collectedAt: collectedAt ?? null, success: !stale && ['idle', 'busy', 'partial', 'unhealthy', 'ready'].includes(state),
+        });
+        return { host,
+          ...(input.scope !== 'containers' ? { npu: outcome(record.state, record.snapshot?.collectedAt, record.stale) } : {}),
+          ...(input.scope !== 'npu' ? { containers: outcome(record.devContainers?.state ?? 'unknown', record.devContainers?.snapshot?.collectedAt, record.devContainers?.stale ?? false) } : {}),
+        };
+      }),
+    };
+  });
 }

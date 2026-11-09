@@ -1,19 +1,11 @@
 export type DataSource = 'exporter' | 'npu-smi';
 
-export type HostState =
-  | 'unknown'
-  | 'refreshing'
-  | 'idle'
-  | 'busy'
-  | 'partial'
-  | 'unhealthy'
-  | 'unreachable'
-  | 'timeout'
-  | 'authError'
-  | 'hostKeyError'
-  | 'unsupported'
-  | 'error'
-  | 'missingConfig';
+export const HOST_STATES = [
+  'unknown', 'refreshing', 'idle', 'busy', 'partial', 'unhealthy', 'unreachable',
+  'timeout', 'authError', 'hostKeyError', 'unsupported', 'error', 'missingConfig',
+] as const;
+
+export type HostState = typeof HOST_STATES[number];
 
 export interface SshHost {
   alias: string;

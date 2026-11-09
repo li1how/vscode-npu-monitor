@@ -3,8 +3,9 @@ import * as vscode from 'vscode';
 import { devContainerDisplayName, isValidWorkspaceFileName } from '../containers/metadata.js';
 import { getSettings } from '../settings.js';
 import type { HostRecord } from '../types.js';
-import { formatSshTarget } from './hostActions.js';
+import { formatSshTarget } from './formatters.js';
 import { ContainerNode, type HostNode, type MonitorNode } from './nodes.js';
+import { contextSelection, uniqueBy } from './selection.js';
 
 export function formatContainerSummary(node: ContainerNode): string {
   const { container, record } = node;
@@ -62,25 +63,20 @@ async function copyContainers(
   node: MonitorNode | undefined,
   format: (container: ContainerNode) => string,
 ): Promise<void> {
-  let selected = selection.filter((item): item is ContainerNode => item instanceof ContainerNode);
-  if (node instanceof ContainerNode && !selected.some(item =>
-    item.record.host.alias === node.record.host.alias && item.container.id === node.container.id)) {
-    selected = [node];
-  }
-  const unique = new Map<string, ContainerNode>();
-  for (const item of selected) {
+  const key = (item: ContainerNode): string => JSON.stringify([item.record.host.alias, item.container.id]);
+  const selected = contextSelection(selection, node,
+    (item): item is ContainerNode => item instanceof ContainerNode, key);
+  const latest = uniqueBy(selected.flatMap(item => {
     // A refresh can replace a snapshot while VS Code still holds an old tree selection.
-    const latest = item.record.devContainers?.snapshot?.containers.find(value => value.id === item.container.id);
-    if (latest) {
-      unique.set(JSON.stringify([item.record.host.alias, latest.id]), new ContainerNode(item.record, latest));
-    }
-  }
-  if (!unique.size) {
+    const container = item.record.devContainers?.snapshot?.containers.find(value => value.id === item.container.id);
+    return container ? [new ContainerNode(item.record, container)] : [];
+  }), key);
+  if (!latest.length) {
     void vscode.window.showInformationMessage(vscode.l10n.t('Select one or more containers first.'));
     return;
   }
   try {
-    await vscode.env.clipboard.writeText([...unique.values()].map(format).join('\n\n---\n\n'));
+    await vscode.env.clipboard.writeText(latest.map(format).join('\n\n---\n\n'));
   } catch (error) {
     void vscode.window.showErrorMessage(vscode.l10n.t('Unable to copy container information: {0}',
       error instanceof Error ? error.message : String(error)));

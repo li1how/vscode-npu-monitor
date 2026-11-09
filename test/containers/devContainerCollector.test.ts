@@ -3,11 +3,13 @@ import { existsSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
+import type * as vscode from 'vscode';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildDevContainerScanCommand, DevContainerCollector, parseDevContainerOutput } from '../../src/containers/collector.js';
 import { getSettings } from '../../src/settings.js';
 import { SshExecutionError } from '../../src/ssh/runner.js';
+import { makeHost } from '../helpers/fixtures.js';
 
 const id = 'a'.repeat(64);
 const metadata = {
@@ -142,14 +144,18 @@ describe('Dev Container collection', () => {
 
   it('passes the independent timeout and cancellation token to the shared runner', async () => {
     const run = vi.fn().mockResolvedValue({ stdout: envelope(), stderr: '' });
-    const collector = new DevContainerCollector({ run } as never, getSettings());
-    const token = { isCancellationRequested: false };
-    await collector.scan({ alias: 'host' } as never, token as never);
+    const collector = new DevContainerCollector({ run }, getSettings());
+    const token: vscode.CancellationToken = {
+      isCancellationRequested: false,
+      onCancellationRequested: () => ({ dispose: vi.fn() }),
+    };
+    const host = makeHost({ alias: 'host' });
+    await collector.scan(host, token);
     expect(run.mock.calls[0]?.[2]).toBe(13000);
     expect(run.mock.calls[0]?.[3]).toBe(token);
     run.mockRejectedValue(new SshExecutionError('timeout', 'Timed out', ''));
-    expect((await collector.scan({} as never)).state).toBe('timeout');
+    expect((await collector.scan(host)).state).toBe('timeout');
     run.mockRejectedValue(new SshExecutionError('authError', 'SSH permission denied', ''));
-    expect((await collector.scan({} as never)).state).toBe('authError');
+    expect((await collector.scan(host)).state).toBe('authError');
   });
 });
