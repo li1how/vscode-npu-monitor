@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Update development minimatch to 11.0.5 and glob to 14.0.4 to fix the globparts amplification advisory (GHSA-g3hv-75wg-m249).
 - Organize MCP tools around resource overview, filtered host discovery, section-specific details, historical evidence and explicit scoped refresh. Replace previous tools with bounded, paginated results and shared read-only resource state.
 
 - Add host search by alias, address and local note, persistent favorites, and cached host filters with visible/total counts. Replace the idle-host picker with the idle filter while retaining duration ranking.
