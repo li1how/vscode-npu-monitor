@@ -63,6 +63,7 @@ vi.mock('../src/npu/collector.js', () => ({
 }));
 
 import { MonitorService } from '../src/monitorService.js';
+import { HostBrowser } from '../src/ui/hostBrowser.js';
 
 function snapshot(utilizationPercent: number, processCount: number): ScanResult {
   return {
@@ -188,6 +189,29 @@ describe('monitor scan orchestration', () => {
     expect(service.getRecord('alpha')?.subscribed).toBe(true);
     expect(service.getRecord('beta')?.subscribed).toBe(false);
     service.dispose();
+  });
+
+  it('keeps full scans and subscriptions independent of local browsing preferences and filters', async () => {
+    settingsState.value!.devContainersEnabled = true;
+    const context = createContext(['alpha']);
+    const service = createService(['alpha'], context);
+    await service.reloadConfig(false);
+    const browser = new HostBrowser(service, context.globalState);
+    try {
+      await browser.setFavorite([service.getRecord('beta')!], true);
+      await browser.setNote(service.getRecord('beta')!, 'Favorite benchmark host');
+      browser.setFilter('favorites');
+      expect(browser.records().map(record => record.host.alias)).toEqual(['beta']);
+      expect(collectorState.aliases).toEqual([]);
+      expect(containersState.aliases).toEqual([]);
+      await service.scanAll();
+      expect(collectorState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
+      expect(containersState.aliases.sort()).toEqual(['alpha', 'beta', 'gamma']);
+      expect(service.getRecords().filter(record => record.subscribed).map(record => record.host.alias)).toEqual(['alpha']);
+    } finally {
+      browser.dispose();
+      service.dispose();
+    }
   });
 
   it('stops taking queued hosts after cancellation', async () => {

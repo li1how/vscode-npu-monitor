@@ -6,8 +6,9 @@ import type { McpController } from '../mcp/controller.js';
 import { isDeviceIdle } from '../npu/idle.js';
 import type { MonitorService } from '../monitorService.js';
 import { getSettings } from '../settings.js';
-import type { DevContainer, DevContainerState, HostRecord, HostState, NpuDevice } from '../types.js';
+import type { DevContainer, DevContainerState, HostRecord, NpuDevice } from '../types.js';
 import { McpNode, ContainerNode, DeviceNode, GroupNode, HostNode, StatusNode, type MonitorNode } from './nodes.js';
+import { type HostBrowser, hostStateText as stateText, summarizeNpu } from './hostBrowser.js';
 import { formatDuration } from './idleHistory.js';
 
 function visibleContainers(record: HostRecord): DevContainer[] {
@@ -41,25 +42,6 @@ function runtimeStateText(state: string): string {
   }
 }
 
-function stateText(state: HostState): string {
-  const values: Record<HostState, string> = {
-    unknown: vscode.l10n.t('Not scanned'),
-    refreshing: vscode.l10n.t('Refreshing'),
-    idle: vscode.l10n.t('Idle'),
-    busy: vscode.l10n.t('Busy'),
-    partial: vscode.l10n.t('Partial data'),
-    unhealthy: vscode.l10n.t('Unhealthy'),
-    unreachable: vscode.l10n.t('Unreachable'),
-    timeout: vscode.l10n.t('Timed out'),
-    authError: vscode.l10n.t('Authentication failed'),
-    hostKeyError: vscode.l10n.t('Host key error'),
-    unsupported: vscode.l10n.t('No collector'),
-    error: vscode.l10n.t('Error'),
-    missingConfig: vscode.l10n.t('Missing configuration'),
-  };
-  return values[state];
-}
-
 function stateIcon(record: HostRecord): vscode.ThemeIcon {
   if (record.refreshing) {
     return new vscode.ThemeIcon('sync~spin');
@@ -89,8 +71,12 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
 
   public readonly onDidChangeTreeData = this.changeEmitter.event;
 
-  public constructor(private readonly service: MonitorService, private readonly mcp?: McpController) {
-    this.serviceSubscription = service.onDidChange(() => this.changeEmitter.fire(undefined));
+  public constructor(
+    private readonly service: MonitorService,
+    private readonly mcp?: McpController,
+    private readonly browser?: HostBrowser,
+  ) {
+    this.serviceSubscription = (browser ?? service).onDidChange(() => this.changeEmitter.fire(undefined));
   }
 
   public refresh(): void { this.changeEmitter.fire(undefined); }
@@ -98,7 +84,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
   public getChildren(element?: MonitorNode): MonitorNode[] {
     if (!element) {
       return [...(this.mcp ? [new McpNode(this.mcp.state, this.mcp.tooltip)] : []),
-        ...this.service.getRecords().map(record => new HostNode(record))];
+        ...(this.browser?.records() ?? this.service.getRecords()).map(record => new HostNode(record))];
     }
     if (element instanceof HostNode) {
       if (getSettings().devContainersEnabled) {
@@ -253,7 +239,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
 
   private hostTreeItem(record: HostRecord): vscode.TreeItem {
     const item = new vscode.TreeItem(
-      record.host.alias,
+      (this.browser?.preference(record).favorite ? '★ ' : '') + record.host.alias,
       getSettings().devContainersEnabled || record.snapshot?.devices.length
         ? vscode.TreeItemCollapsibleState.Collapsed
         : vscode.TreeItemCollapsibleState.None,
@@ -261,32 +247,17 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
     const source = record.snapshot?.source === 'exporter' ? 'Exporter' : 'npu-smi';
     const state = record.refreshing ? stateText('refreshing') : stateText(record.state);
     const now = Date.now();
-    const fresh = record.snapshot && !record.stale && now >= record.snapshot.collectedAt &&
-      now - record.snapshot.collectedAt <= getSettings().pollIntervalSeconds * 2000;
-    const outdated = record.stale || Boolean(record.snapshot && !fresh);
-    const description: string[] = [];
-    if (record.refreshing || outdated || (record.state !== 'idle' && record.state !== 'busy')) {
-      description.push(state);
-    }
-    if (outdated) description.push(vscode.l10n.t('Stale'));
-    if (record.snapshot) {
-      const history = this.service.getIdleHistory(record.host.alias, now);
-      const ids = new Set(record.snapshot.devices.map(device => device.id));
-      const idleCards = fresh ? history.cards.filter(card => ids.has(card.id) && card.idleSince !== null) : [];
-      description.push(vscode.l10n.t('{0}/{1} idle NPUs', idleCards.length, record.snapshot.devices.length));
-      if (idleCards.length) {
-        const longest = Math.min(...idleCards.map(card => card.idleSince!));
-        description.push(vscode.l10n.t('Longest idle: {0}', formatDuration(now - longest)));
-      }
-      description.push(new Date(record.snapshot.collectedAt).toLocaleTimeString());
-    }
+    const description = summarizeNpu(record, this.service.getIdleHistory(record.host.alias, now, false), now).description;
+    const preference = this.browser?.preference(record);
+    if (preference?.note) description.unshift(preference.note);
     if (getSettings().devContainersEnabled && record.devContainers?.snapshot) {
       description.push(visibleContainers(record).length + ' ' + containerGroupLabel() +
         (record.devContainers.stale ? ' · ' + vscode.l10n.t('Stale') : ''));
     }
     item.description = description.join(' · ');
     item.iconPath = stateIcon(record);
-    item.contextValue = record.subscribed ? 'npuHostSubscribed' : 'npuHostUnsubscribed';
+    item.contextValue = (record.subscribed ? 'npuHostSubscribed' : 'npuHostUnsubscribed') +
+      (preference?.favorite ? 'Favorite' : '');
     item.id = 'host:' + record.host.alias;
     const target = record.host.user
       ? record.host.user + '@' + record.host.hostname
@@ -309,6 +280,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
     if (record.error) {
       tooltip.appendMarkdown('  \n\n' + record.error);
     }
+    if (preference?.note) tooltip.appendText('\n' + vscode.l10n.t('Note: {0}', preference.note));
     item.tooltip = tooltip;
     return item;
   }

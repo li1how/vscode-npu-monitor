@@ -9,6 +9,7 @@ interfaces that follow the VS Code language setting.
 ## Features
 
 - Load hosts automatically from an OpenSSH configuration file.
+- Find hosts by alias, address or local note; pin favorites and filter the host list.
 - Refresh NPU status for all hosts automatically, or scan all, one, or selected hosts manually.
 - Track per-NPU idle history and choose hosts by observed continuous idle time.
 - Subscribe to idle notifications; containers refresh on startup and manual scans.
@@ -98,9 +99,10 @@ archives in zip and tar.gz formats.
    copying supports multiple selected hosts.
 6. Select the bell icon to subscribe to a host. It is scanned immediately; periodic
    NPU scans can send idle notifications.
-7. Use the view-title **Choose Idle Host** button to rank fresh candidates by the longest
-   observed continuous idle time. Selecting one reveals and expands its tree row. Use
-   the history icon beside each host's bell to view its per-NPU timeline, with the newest day first.
+7. Use the title-bar **Find Host** button to search all hosts by alias, address or note,
+   then reveal and expand the selected host. Use **Filter Hosts → Hosts with idle NPUs**
+   to rank fresh candidates by their longest observed per-card continuous idle time.
+   The history icon beside each host's bell shows its per-NPU timeline, newest day first.
 8. Host rows show idle NPU count, longest observed idle time, collection time and
    container count. Hover for full status and collection source. Expand a host to view
    NPU and container status. Use a running container's
@@ -117,6 +119,34 @@ per-card idle threshold or process rule starts a new history under the new rule.
 
 Remote - SSH must use the same SSH configuration and host aliases as NPU Monitor
 when opening a container.
+
+### Finding and organizing hosts
+
+- **Find Host** searches all loaded hosts, regardless of the active tree filter. Favorites
+  appear first, followed by natural host-name order. Results show the address, note and
+  cached NPU status. Selecting a hidden result clears the filter before revealing it;
+  cancelling search preserves the filter and selection.
+- Right-click one or more hosts to **Favorite Hosts** or **Unfavorite Hosts**. Favorites
+  appear once at the top of ordinary lists with a star, independently of idle notifications.
+  Right-click one host to **Edit Host Note**; an empty note removes it.
+- **Filter Hosts** offers All hosts, Favorite hosts, Subscribed hosts, Hosts with idle NPUs,
+  NPU errors and Stale NPU data. The message above the tree shows the current filter and
+  visible/total host counts. **Clear Host Filter** restores all hosts. Filters reset when
+  the window reloads; MCP status is always visible and is not included in host counts.
+- The idle filter requires a complete, fresh NPU snapshot and matching per-card history,
+  and always means at least one idle card, regardless of the
+  notification `idleScope`. It sorts by the longest idle time, then idle card count, then
+  natural host name. Other filters put favorites first. Unconfirmed idle counts show `?`.
+- NPU errors include connection/collection failures, unhealthy devices, partial data,
+  missing collectors and missing SSH configuration. Stale NPU data requires a previous
+  snapshot that failed to refresh or exceeded twice the polling interval. Unscanned
+  hosts are not stale. Errors and stale data can overlap; Docker failures stay independent.
+- Favorites and notes are stored locally across workspaces in the current extension
+  environment, keyed by SSH configuration path and host alias. Windows and WSL do not
+  automatically share them. They do not edit SSH configuration or rename hosts.
+- Search, preferences and filters only use cached data. Cache updates and NPU expiry
+  update the view without starting SSH queries or changing subscriptions. **Scan All Hosts**
+  always scans all configured hosts, including those hidden by a filter.
 
 ### MCP access
 

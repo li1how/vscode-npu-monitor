@@ -76,11 +76,6 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "npuMonitor.chooseIdleHost",
-        "title": "%command.chooseIdleHost%",
-        "icon": "$(list-ordered)"
-      },
-      {
         "command": "npuMonitor.showIdleHistory",
         "title": "%command.showIdleHistory%",
         "icon": "$(history)"
@@ -143,6 +138,36 @@
         "command": "npuMonitor.mcpMenu",
         "title": "%command.mcpMenu%",
         "icon": "$(plug)"
+      },
+      {
+        "command": "npuMonitor.findHost",
+        "title": "%command.findHost%",
+        "icon": "$(search)"
+      },
+      {
+        "command": "npuMonitor.filterHosts",
+        "title": "%command.filterHosts%",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "npuMonitor.clearHostFilter",
+        "title": "%command.clearHostFilter%",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "npuMonitor.favoriteHost",
+        "title": "%command.favoriteHost%",
+        "icon": "$(star)"
+      },
+      {
+        "command": "npuMonitor.unfavoriteHost",
+        "title": "%command.unfavoriteHost%",
+        "icon": "$(star-full)"
+      },
+      {
+        "command": "npuMonitor.editHostNote",
+        "title": "%command.editHostNote%",
+        "icon": "$(edit)"
       }
     ],
     "menus": {
@@ -178,9 +203,19 @@
           "group": "2_actions@4"
         },
         {
-          "command": "npuMonitor.chooseIdleHost",
+          "command": "npuMonitor.findHost",
           "when": "view == npuMonitor.hosts",
           "group": "navigation@2"
+        },
+        {
+          "command": "npuMonitor.filterHosts",
+          "when": "view == npuMonitor.hosts",
+          "group": "navigation@3"
+        },
+        {
+          "command": "npuMonitor.clearHostFilter",
+          "when": "view == npuMonitor.hosts && npuMonitor.hostFilterActive",
+          "group": "navigation@4"
         }
       ],
       "view/item/context": [
@@ -191,12 +226,12 @@
         },
         {
           "command": "npuMonitor.subscribeHost",
-          "when": "view == npuMonitor.hosts && viewItem == npuHostUnsubscribed",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHostUnsubscribed/",
           "group": "inline@2"
         },
         {
           "command": "npuMonitor.unsubscribeHost",
-          "when": "view == npuMonitor.hosts && viewItem == npuHostSubscribed",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHostSubscribed/",
           "group": "inline@2"
         },
         {
@@ -238,6 +273,21 @@
           "command": "npuMonitor.showIdleHistory",
           "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
           "group": "inline@3"
+        },
+        {
+          "command": "npuMonitor.favoriteHost",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost(Subscribed|Unsubscribed)$/",
+          "group": "3_manage@1"
+        },
+        {
+          "command": "npuMonitor.unfavoriteHost",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/ && viewItem =~ /Favorite$/",
+          "group": "3_manage@1"
+        },
+        {
+          "command": "npuMonitor.editHostNote",
+          "when": "view == npuMonitor.hosts && viewItem =~ /^npuHost/",
+          "group": "3_manage@2"
         }
       ],
       "commandPalette": [
@@ -247,6 +297,10 @@
         },
         {
           "command": "npuMonitor.openSshWindow",
+          "when": "false"
+        },
+        {
+          "command": "npuMonitor.editHostNote",
           "when": "false"
         }
       ]
