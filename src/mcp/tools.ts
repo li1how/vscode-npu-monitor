@@ -1,136 +1,73 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
-import { filterContainers } from '../containers/filter.js';
-import type { MonitorService } from '../monitorService.js';
-import { evaluateSnapshot } from '../npu/idle.js';
-import type { HostRecord, MonitorSettings } from '../types.js';
+import { version } from '../../package.json';
+import type { MonitorSettings } from '../types.js';
+import { getHistory } from './history.js';
+import { inspectHost, overview, queryHosts, refreshHosts, SECTIONS, type MonitorReader } from './queries.js';
+import { bounded, failure, type QueryResult, SnapshotPages } from './results.js';
 
-export type MonitorReader = Pick<MonitorService,
-  'getRecords' | 'getRecord' | 'scanAliases' | 'scanContainerAliases' | 'listHostImages' | 'getIdleHistory' | 'getIdleCandidates'>;
+export type { MonitorReader } from './queries.js';
+const pageInput = {
+  limit: z.number().int().min(1).max(50).default(10).describe('Maximum rows; the response byte budget may reduce the page size.'),
+  cursor: z.string().min(1).max(1024).optional().describe('Previous nextCursor; keep the other query conditions unchanged.'),
+};
+const host = z.string().min(1).max(512);
+const query = z.string().trim().min(1).max(256).optional();
+const state = z.enum(['unknown', 'refreshing', 'idle', 'busy', 'partial', 'unhealthy', 'unreachable',
+  'timeout', 'authError', 'hostKeyError', 'unsupported', 'error', 'missingConfig']);
+const outputSchema = {
+  asOf: z.number(), data: z.record(z.string(), z.unknown()),
+  page: z.object({ total: z.number().int(), returned: z.number().int(), nextCursor: z.string().nullable() }).optional(),
+  error: z.object({ code: z.string(), message: z.string() }).optional(),
+};
 
-export function hostState(record: HostRecord, settings: MonitorSettings, details: boolean, now = Date.now()) {
-  const observation = (collectedAt: number | undefined, stale: boolean) => ({
-    collectedAt: collectedAt ?? null,
-    ageSeconds: collectedAt === undefined ? null : Math.max(0, now - collectedAt) / 1000,
-    stale,
+export function createMonitorMcp(service: MonitorReader, settings: () => MonitorSettings, pages = new SnapshotPages()): McpServer {
+  const server = new McpServer({ name: 'npu-monitor', version }, {
+    instructions: 'Queries read caches; only refresh_hosts runs SSH collection. NPU observations expire after twice the poll interval; containers have no fixed expiry. Pages use fixed asOf snapshots. Idle is not a reservation. Subscriptions and remote resources are unchanged.',
   });
-  const npuCollectedAt = record.snapshot?.collectedAt;
-  const npuMaxAgeSeconds = settings.pollIntervalSeconds * 2;
-  const npuTime = {
-    ...observation(npuCollectedAt, record.stale),
-    maxAgeSeconds: npuMaxAgeSeconds,
-    validUntil: npuCollectedAt === undefined ? null : npuCollectedAt + npuMaxAgeSeconds * 1000,
-    outdated: npuCollectedAt === undefined || now < npuCollectedAt ||
-      now - npuCollectedAt > npuMaxAgeSeconds * 1000,
+  const execute = async (operation: () => QueryResult | Promise<QueryResult>) => {
+    let data: QueryResult;
+    try { data = bounded(await operation()); } catch (error) { data = failure(error); }
+    return { content: [{ type: 'text' as const, text: JSON.stringify(data) }],
+      structuredContent: { ...data }, ...(data.error ? { isError: true } : {}) };
   };
-  const containerTime = {
-    ...observation(record.devContainers?.snapshot?.collectedAt, record.devContainers?.stale ?? false),
-    maxAgeSeconds: null,
-    validUntil: null,
-    outdated: null,
-  };
-  const containers = settings.devContainersEnabled
-    ? filterContainers(record.devContainers?.snapshot?.containers ?? [], settings) : [];
-  const valid = !npuTime.stale && !npuTime.outdated &&
-    ['idle', 'busy'].includes(record.state) && record.snapshot && !record.snapshot.partial;
-  const idle = valid ? evaluateSnapshot(record.snapshot!, settings) : null;
-  return {
-    host: { alias: record.host.alias, hostname: record.host.hostname,
-      user: record.host.user ?? null, port: record.host.port ?? 22, sshConfig: record.host.configPath },
-    subscribed: record.subscribed,
-    npu: { ...npuTime, state: record.state, refreshing: record.refreshing,
-      error: record.error ?? null, idle: idle ? idle.state === 'idle' : null,
-      idleDevices: idle?.idleDevices ?? null, deviceCount: record.snapshot?.devices.length ?? null,
-      ...(details ? { devices: record.snapshot?.devices ?? [] } : {}) },
-    containers: { ...containerTime,
-      enabled: settings.devContainersEnabled, state: record.devContainers?.state ?? 'unknown',
-      refreshing: record.devContainers?.refreshing ?? false, error: record.devContainers?.error ?? null,
-      filterMode: settings.containerFilterMode, workspacePaths: settings.containerWorkspacePaths,
-      count: containers.length, ...(details ? { items: containers } : {}) },
-  };
-}
-
-export function createMonitorMcp(service: MonitorReader, settings: () => MonitorSettings): McpServer {
-  const server = new McpServer({ name: 'npu-monitor', version: '1.0.0' }, {
-    instructions: 'Queries read cached snapshots and idle history. NPU snapshots expire after twice the poll interval; container snapshots have no fixed expiry, so check their collectedAt, ageSeconds and stale fields. rank_idle_hosts uses only fresh NPU observations; idle is not a reservation. refresh_hosts refreshes NPU and containers; refresh_containers refreshes only containers. list_host_images queries read-only Docker image metadata. Neither reserves resources or changes subscriptions. Initialization and execution belong to external tools.',
-  });
-  const result = (data: Record<string, unknown>) => ({
-    content: [{ type: 'text' as const, text: JSON.stringify(data) }], structuredContent: data,
-  });
   const annotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false };
-  const withHistory = (record: HostRecord, details: boolean) => {
-    const history = service.getIdleHistory(record.host.alias);
-    return {
-      ...hostState(record, settings(), details),
-      idleHistory: details ? history : {
-        alias: history.alias,
-        retentionDays: history.retentionDays,
-        cards: history.cards.map(({ id, state, observedAt, idleSince }) =>
-          ({ id, state, observedAt, idleSince })),
-      },
-    };
-  };
-  server.registerTool('list_hosts', { description: 'List cached host summaries; no SSH queries.', annotations },
-    () => result({ hosts: service.getRecords().map(r => withHistory(r, false)) }));
-  server.registerTool('get_host_state', {
-    description: 'Read cached NPU, process and filtered container details for one SSH alias.',
-    inputSchema: { host: z.string().min(1) }, annotations,
-  }, ({ host }) => {
-    const record = service.getRecord(host);
-    if (!record) throw new Error('Unknown SSH host');
-    return result(withHistory(record, true));
-  });
-  server.registerTool('get_idle_history', {
-    description: 'Read cached per-NPU idle history for one SSH alias; no SSH query.',
-    inputSchema: { host: z.string().min(1) }, annotations,
-  }, ({ host }) => {
-    if (!service.getRecord(host)) throw new Error('Unknown SSH host');
-    return result({ history: service.getIdleHistory(host) });
-  });
-  server.registerTool('rank_idle_hosts', {
-    description: 'Rank recently observed idle hosts by continuous idle duration; no SSH query.',
-    annotations,
-  }, () => result({ candidates: service.getIdleCandidates() }));
+  server.registerTool('get_overview', {
+    description: 'Read cached resource totals, model distribution and observation coverage.',
+    inputSchema: pageInput, outputSchema, annotations,
+  }, input => execute(() => overview(service, settings(), pages, input)));
+  server.registerTool('query_hosts', {
+    description: 'Search and filter cached hosts and visible containers. Returns paginated resource summaries with freshness; conditions intersect.',
+    inputSchema: { ...pageInput,
+      query: query.describe('Case-insensitive alias, address, note or container name/image/workspace search.'),
+      model: z.string().trim().min(1).max(256).optional().describe('Exact reported model name, case-insensitive.'),
+      minIdleCards: z.number().int().min(1).optional().describe('Minimum confirmed idle devices, independent of notification idleScope.'),
+      minIdleSeconds: z.number().min(0).optional().describe('Minimum longest continuous idle duration among devices.'),
+      state: state.optional(), favorite: z.boolean().optional(), subscribed: z.boolean().optional(),
+      sort: z.enum(['name', 'idleCards', 'idleDuration']).default('name').describe('Name ascending; idle counts or durations descending, then name.') }, outputSchema, annotations,
+  }, input => execute(() => queryHosts(service, settings(), pages, input)));
+  server.registerTool('inspect_host', {
+    description: 'Read a cached host summary or one selected detail section.',
+    inputSchema: { ...pageInput, host, section: z.enum(SECTIONS).default('summary'),
+      deviceId: z.string().min(1).max(128).optional().describe('Existing cached device ID for the processes section.'),
+      query: query.describe('Container search for the containers section.'),
+      containerId: z.string().min(1).max(128).optional().describe('Full container ID; required for the container section.') },
+    outputSchema, annotations,
+  }, input => execute(() => inspectHost(service, settings(), pages, input)));
+  server.registerTool('get_history', {
+    description: 'Read per-device observation counts and coverage, or paginated 15-minute history buckets.',
+    inputSchema: { ...pageInput, host, cards: z.array(z.string().min(1).max(128)).min(1).max(128).optional(),
+      from: z.number().int().min(0).optional().describe('Unix milliseconds within retention; defaults to 24 hours before to.'),
+      to: z.number().int().min(0).optional().describe('Unix milliseconds; defaults to now.'),
+      mode: z.enum(['summary', 'buckets']).default('summary') }, outputSchema, annotations,
+  }, input => execute(() => getHistory(service, settings(), pages, input)));
   server.registerTool('refresh_hosts', {
-    description: 'Refresh explicitly named SSH hosts and return snapshots; does not subscribe hosts.',
-    inputSchema: { hosts: z.array(z.string().min(1)).min(1).max(100) },
-    annotations: { ...annotations, openWorldHint: true },
-  }, async ({ hosts }) => {
-    const aliases = [...new Set(hosts)];
-    if (aliases.some(alias => !service.getRecord(alias) || service.getRecord(alias)?.state === 'missingConfig')) {
-      throw new Error('Unknown or unavailable SSH host');
-    }
-    await service.scanAliases(aliases);
-    return result({ hosts: aliases.map(alias => {
-      const record = service.getRecord(alias);
-      return record ? withHistory(record, true) : { host: alias, error: 'Host removed' };
-    }) });
-  });
-  server.registerTool('refresh_containers', {
-    description: 'Refresh only Dev Container metadata for selected SSH aliases; NPU snapshots are unchanged.',
-    inputSchema: { hosts: z.array(z.string().min(1)).min(1).max(100) },
-    annotations: { ...annotations, openWorldHint: true },
-  }, async ({ hosts }) => {
-    const aliases = [...new Set(hosts)];
-    if (aliases.some(alias => !service.getRecord(alias) || service.getRecord(alias)?.state === 'missingConfig')) {
-      throw new Error('Unknown or unavailable SSH host');
-    }
-    await service.scanContainerAliases(aliases);
-    return result({ hosts: aliases.map(alias => {
-      const record = service.getRecord(alias);
-      return record ? withHistory(record, true) : { host: alias, error: 'Host removed' };
-    }) });
-  });
-  server.registerTool('list_host_images', {
-    description: 'Query at most 20 vLLM-Ascend Docker image candidates on one SSH host; read-only.',
-    inputSchema: { host: z.string().min(1) },
-    annotations: { ...annotations, openWorldHint: true },
-  }, async ({ host }) => {
-    if (!service.getRecord(host) || service.getRecord(host)?.state === 'missingConfig') {
-      throw new Error('Unknown or unavailable SSH host');
-    }
-    return result(await service.listHostImages(host));
-  });
+    description: 'Refresh NPU or container caches for selected hosts. Returns per-source status and collection times.',
+    inputSchema: { ...pageInput,
+      cursor: pageInput.cursor.describe('Continue stored refresh results without collecting again.'),
+      hosts: z.array(host).min(1).max(20), scope: z.enum(['npu', 'containers', 'both']).default('npu') },
+    outputSchema, annotations: { ...annotations, openWorldHint: true },
+  }, input => execute(() => refreshHosts(service, settings(), pages, input)));
   return server;
 }

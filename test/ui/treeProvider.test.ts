@@ -207,6 +207,14 @@ describe('NpuTreeProvider', () => {
     expect(item.contextValue).toBe('npuDevice');
     provider.dispose();
   });
+
+  it.each([undefined, '', '   '])('displays unknown model metadata for %j', model => {
+    const record = makeRecord();
+    const provider = new NpuTreeProvider(makeService([record]) as never);
+    const item = provider.getTreeItem(new DeviceNode(record, makeDevice({ model })));
+    expect((item.tooltip as { value: string }).value).toContain('Model: Unknown');
+    provider.dispose();
+  });
 });
 
 describe('Dev Container tree', () => {

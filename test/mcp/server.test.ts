@@ -3,13 +3,12 @@ import { createServer } from 'node:net';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { MonitorHttpServer } from '../../src/mcp/server.js';
-import { hostState } from '../../src/mcp/tools.js';
 import { getSettings } from '../../src/settings.js';
-import type { HostRecord } from '../../src/types.js';
-import { configurationValues, resetVscodeMock } from '../mocks/vscode.js';
+import { resetVscodeMock } from '../mocks/vscode.js';
+import { fixture } from './fixtures.js';
 
 // Use direct loopback HTTP regardless of developer proxy environment.
 const localFetch: typeof fetch = async (input, init) => new Promise((resolve, reject) => {
@@ -27,28 +26,7 @@ const localFetch: typeof fetch = async (input, init) => new Promise((resolve, re
 });
 
 const token = 'a'.repeat(64);
-const record: HostRecord = {
-  host: { alias: 'node(A3)', hostname: '10.0.0.1', configPath: '/tmp/ssh config',
-    identityFiles: ['/secret/key'], useAlias: true },
-  state: 'idle', subscribed: true, refreshing: false, stale: false, idleStreak: 1, idleNotified: false,
-  snapshot: { source: 'npu-smi', collectedAt: Date.now(), durationMs: 1, partial: false,
-    devices: [{ id: '0', health: 'OK', utilizationPercent: 0, processes: [] }] },
-  devContainers: { state: 'ready', refreshing: false, stale: false,
-    snapshot: { collectedAt: Date.now(), durationMs: 1, containers: [
-      { id: 'f'.repeat(64), isDevContainer: true, name: 'dev', state: 'running', image: 'test', createdAt: '', workspaceFolder: '/work/me' },
-      { id: 'e'.repeat(64), isDevContainer: false, name: 'other', state: 'exited', image: 'test', createdAt: '' },
-    ] } },
-};
-const service = { getRecords: () => [record], getRecord: (alias: string) => alias === record.host.alias ? record : undefined,
-  scanAliases: vi.fn(async () => {}),
-  scanContainerAliases: vi.fn(async () => {}),
-  listHostImages: vi.fn(async (host: string) => ({ host, collectedAt: Date.now(), state: 'ready', images: [] })),
-  getIdleHistory: (alias: string) => ({ alias, retentionDays: 7, cards: [] }),
-  getIdleCandidates: () => [{ alias: record.host.alias, durationMs: 60000, idleDevices: 1,
-    deviceCount: 1, deviceId: '0', observedAt: record.snapshot!.collectedAt,
-    collectedAt: record.snapshot!.collectedAt, ageSeconds: 0, maxAgeSeconds: 360,
-    validUntil: record.snapshot!.collectedAt + 360000, outdated: false as const }],
-};
+const { service, records } = fixture();
 const servers: MonitorHttpServer[] = [];
 const clients: Client[] = [];
 async function freePort() {
@@ -74,82 +52,54 @@ async function connect(url: string) {
 afterEach(async () => {
   await Promise.all(clients.splice(0).map(c => c.close()));
   await Promise.all(servers.splice(0).map(s => s.stop()));
-  service.scanAliases.mockClear(); service.scanContainerAliases.mockClear();
-  service.listHostImages.mockClear(); resetVscodeMock();
-});
-
-describe('MCP snapshots', () => {
-  it('filters cached data, keeps complete IDs and excludes SSH secrets', () => {
-    const data = hostState(record, getSettings(), true);
-    expect(data.containers.count).toBe(1);
-    expect(data.npu.idle).toBe(true);
-    expect(JSON.stringify(data)).not.toContain('/secret');
-    configurationValues.set('npuMonitor.containers.filterMode', 'all');
-    expect(hostState(record, getSettings(), true).containers.count).toBe(2);
-    configurationValues.set('npuMonitor.containers.filterMode', 'workspacePaths');
-    configurationValues.set('npuMonitor.containers.workspacePaths', ['/elsewhere']);
-    expect(hostState(record, getSettings(), true).containers.count).toBe(0);
-    expect(service.scanAliases).not.toHaveBeenCalled();
-  });
-  it('reports separate NPU expiry and container observation age without a container TTL', () => {
-    const settings = getSettings();
-    const collectedAt = record.snapshot!.collectedAt;
-    const atBoundary = hostState(record, settings, false, collectedAt + 360000);
-    expect(atBoundary.npu).toMatchObject({ maxAgeSeconds: 360, validUntil: collectedAt + 360000,
-      outdated: false });
-    const expired = hostState(record, settings, false, collectedAt + 360001);
-    expect(expired.npu).toMatchObject({ outdated: true, idle: null });
-    expect(expired.containers).toMatchObject({ maxAgeSeconds: null, validUntil: null,
-      outdated: null, stale: false });
-    expect(expired.containers.ageSeconds).toBeGreaterThan(300);
-    const failed = hostState({ ...record, devContainers: { ...record.devContainers!,
-      state: 'timeout', stale: true } }, settings, false, collectedAt + 360001);
-    expect(failed.containers).toMatchObject({ stale: true, outdated: null });
-    expect(hostState({ ...record, devContainers: undefined }, settings, false, collectedAt).containers)
-      .toMatchObject({ collectedAt: null, ageSeconds: null, validUntil: null, outdated: null });
-  });
-  it('does not infer idle from expired, partial or failed data', () => {
-    expect(hostState(record, getSettings(), false, record.snapshot!.collectedAt + 360001).npu.idle).toBeNull();
-    for (const patch of [{ stale: true }, { state: 'error' as const }, { snapshot: undefined }]) {
-      expect(hostState({ ...record, ...patch }, getSettings(), false).npu.idle).toBeNull();
-    }
-    expect(hostState({ ...record, snapshot: { ...record.snapshot!, partial: true } }, getSettings(), false).npu.idle).toBeNull();
-  });
+  service.refreshAliases.mockClear();
+  records.splice(1); resetVscodeMock();
 });
 
 describe('HTTP MCP', () => {
-  it('initializes two clients and queries caches without SSH; refreshes deduplicated aliases', async () => {
+  it('exposes five bounded tools and shares cursor snapshots across clients and HTTP requests', async () => {
+    const original = records[0]!;
+    for (let index = 2; index <= 15; index++) records.push({ ...original, host: { ...original.host, alias: 'node-' + index } });
     const { url } = await setup();
     const [a, b] = await Promise.all([connect(url), connect(url)]);
-    expect((await a.listTools()).tools.map(t => t.name)).toEqual(['list_hosts', 'get_host_state', 'get_idle_history', 'rank_idle_hosts', 'refresh_hosts', 'refresh_containers', 'list_host_images']);
-    const results = await Promise.all([a.callTool({ name: 'list_hosts' }), b.callTool({ name: 'get_host_state', arguments: { host: record.host.alias } })]);
-    expect(results.every(r => !r.isError)).toBe(true);
-    expect(results[0]?.structuredContent).toMatchObject({ hosts: [{ npu: { maxAgeSeconds: 360 },
-      containers: { validUntil: null, outdated: null } }] });
-    expect(results[1]?.structuredContent).toMatchObject({ npu: { maxAgeSeconds: 360 },
-      containers: { validUntil: null, outdated: null } });
-    expect(service.scanAliases).not.toHaveBeenCalled();
-    expect((await a.callTool({ name: 'refresh_hosts', arguments: { hosts: ['missing'] } })).isError).toBe(true);
-    expect((await a.callTool({ name: 'refresh_hosts', arguments: { hosts: [] } })).isError).toBe(true);
-    expect(service.scanAliases).not.toHaveBeenCalled();
-    const rank = await a.callTool({ name: 'rank_idle_hosts' });
-    expect(rank.structuredContent).toMatchObject({ candidates: [{ alias: record.host.alias,
-      deviceId: '0', maxAgeSeconds: 360, validUntil: record.snapshot!.collectedAt + 360000,
-      outdated: false }] });
-    const history = await b.callTool({ name: 'get_idle_history', arguments: { host: record.host.alias } });
-    expect(history.structuredContent).toMatchObject({ history: { alias: record.host.alias, cards: [] } });
-    expect(service.scanAliases).not.toHaveBeenCalled();
-    const refreshed = await a.callTool({ name: 'refresh_hosts', arguments: { hosts: [record.host.alias, record.host.alias] } });
-    expect(refreshed.structuredContent).toMatchObject({ hosts: [{ npu: { maxAgeSeconds: 360 },
-      containers: { validUntil: null, outdated: null } }] });
-    expect(service.scanAliases).toHaveBeenCalledExactlyOnceWith([record.host.alias]);
-    const npuTime = record.snapshot?.collectedAt;
-    await a.callTool({ name: 'refresh_containers', arguments: { hosts: [record.host.alias, record.host.alias] } });
-    expect(service.scanContainerAliases).toHaveBeenCalledExactlyOnceWith([record.host.alias]);
-    expect(record.snapshot?.collectedAt).toBe(npuTime);
-    expect((await b.callTool({ name: 'list_host_images', arguments: { host: record.host.alias } })).structuredContent)
-      .toMatchObject({ host: record.host.alias, images: [] });
-    expect(service.listHostImages).toHaveBeenCalledExactlyOnceWith(record.host.alias);
+    const definitions = (await a.listTools()).tools;
+    expect(definitions.map(tool => tool.name)).toEqual(['get_overview', 'query_hosts', 'inspect_host', 'get_history', 'refresh_hosts']);
+    expect(definitions.every(tool => tool.outputSchema && tool.inputSchema)).toBe(true);
+    const first = await a.callTool({ name: 'query_hosts' });
+    expect(first.isError).not.toBe(true);
+    expect(Object.keys(first.structuredContent ?? {}).sort()).toEqual(['asOf', 'data', 'page']);
+    expect(first.structuredContent).toMatchObject({ page: { total: 15, returned: 10 }, data: { totalHosts: 15 } });
+    const cursor = (first.structuredContent as any).page.nextCursor;
+    const second = await b.callTool({ name: 'query_hosts', arguments: { cursor } });
+    expect(second.structuredContent).toMatchObject({ asOf: (first.structuredContent as any).asOf, page: { total: 15, returned: 5, nextCursor: null } });
+    const detail = await b.callTool({ name: 'inspect_host', arguments: { host: original.host.alias, section: 'connection' } });
+    expect(detail.structuredContent).toMatchObject({ data: { connection: { alias: original.host.alias, sshConfig: '/tmp/config' } } });
+    expect(JSON.stringify(detail)).not.toContain('/secret');
+    expect(JSON.parse((detail.content as any)[0].text)).toEqual(detail.structuredContent);
+    const unknownDevice = await a.callTool({ name: 'inspect_host', arguments: {
+      host: original.host.alias, section: 'processes', deviceId: '999999',
+    } });
+    expect(unknownDevice.isError).toBe(true);
+    expect(unknownDevice.structuredContent).toMatchObject({ error: { code: 'UNKNOWN_CARD' } });
+    const idleDevice = await a.callTool({ name: 'inspect_host', arguments: {
+      host: original.host.alias, section: 'processes', deviceId: '0',
+    } });
+    expect(idleDevice.isError).not.toBe(true);
+    expect(idleDevice.structuredContent).toMatchObject({ data: { processes: [] }, page: { total: 0 } });
+    expect(service.refreshAliases).not.toHaveBeenCalled();
+    for (const args of [{ hosts: ['missing'] }, { hosts: [] }, { hosts: Array(21).fill(original.host.alias) }]) {
+      expect((await a.callTool({ name: 'refresh_hosts', arguments: args })).isError).toBe(true);
+    }
+    expect(service.refreshAliases).not.toHaveBeenCalled();
+    const refreshed = await a.callTool({ name: 'refresh_hosts', arguments: { hosts: [original.host.alias, original.host.alias] } });
+    expect(service.refreshAliases).toHaveBeenCalledExactlyOnceWith([original.host.alias], 'npu');
+    expect(refreshed.structuredContent).toMatchObject({ data: { scope: 'npu', hosts: [{ host: original.host.alias, npu: { success: true } }] } });
+    expect(JSON.stringify(refreshed)).not.toContain('bins');
+    const history = await a.callTool({ name: 'get_history', arguments: { host: original.host.alias } });
+    expect(history.structuredContent).toMatchObject({ data: { mode: 'summary' } });
+    for (const name of ['list_hosts', 'get_host_state', 'get_idle_history', 'rank_idle_hosts', 'refresh_containers', 'list_host_images']) {
+      expect((await a.callTool({ name })).isError).toBe(true);
+    }
   });
   it('rejects unauthorized, foreign origin/host, invalid paths and malformed requests', async () => {
     const { url } = await setup();

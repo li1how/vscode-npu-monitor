@@ -1,4 +1,5 @@
 import type { NpuDevice, NpuProcess } from '../../types.js';
+import { normalizeNpuModel } from '../model.js';
 
 interface PrometheusSample {
   name: string;
@@ -76,13 +77,13 @@ function getDevice(
   if (!device) {
     device = {
       id,
-      model: sample.labels.model_name,
       health: 'UNKNOWN',
       busId: sample.labels.pcie_bus_info,
       processes: [],
     };
     devices.set(id, device);
   }
+  device.model ??= normalizeNpuModel(sample.labels.model_name);
   return device;
 }
 

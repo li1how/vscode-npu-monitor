@@ -1,4 +1,5 @@
 import type { NpuDevice, NpuProcess } from '../../types.js';
+import { normalizeNpuModel } from '../model.js';
 
 interface PendingDevice {
   id: string;
@@ -60,7 +61,7 @@ function parseA5Devices(lines: string[], processHeaderIndex: number): NpuDevice[
       const summary = (cells[3] ?? '').match(/^(-|\d+(?:\.\d+)?)\s+(-|\d+(?:\.\d+)?)/);
       pending = {
         id: cells[0] ?? '',
-        model: cells[1],
+        model: normalizeNpuModel(cells[1]),
         health: normalizedHealth(cells[2]),
         powerW: numberValue(summary?.[1]),
         temperatureC: numberValue(summary?.[2]),
@@ -99,7 +100,7 @@ function parseA3Devices(lines: string[], processHeaderIndex: number): {
       const summary = (cells[2] ?? '').match(/^(-|\d+(?:\.\d+)?)\s+(-|\d+(?:\.\d+)?)/);
       pending = {
         id: summaryMatch[1] ?? '',
-        model: summaryMatch[2],
+        model: normalizeNpuModel(summaryMatch[2]),
         health: normalizedHealth(cells[1]),
         powerW: numberValue(summary?.[1]),
         temperatureC: numberValue(summary?.[2]),

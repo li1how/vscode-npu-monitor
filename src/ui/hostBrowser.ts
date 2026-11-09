@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 
+import { HOST_PREFERENCES_KEY, hostPreferenceKey, readHostPreference, type HostPreference } from '../hostPreferences.js';
+import { currentNpuState } from '../npu/current.js';
 import type { MonitorService } from '../monitorService.js';
 import type { HostHistoryView } from '../npu/history.js';
 import { getSettings } from '../settings.js';
@@ -8,9 +10,6 @@ import { formatDuration } from './idleHistory.js';
 
 export type HostFilter = 'all' | 'favorites' | 'subscribed' | 'idle' | 'errors' | 'stale';
 export const HOST_FILTERS: readonly HostFilter[] = ['all', 'favorites', 'subscribed', 'idle', 'errors', 'stale'];
-const PREFERENCES_KEY = 'npuMonitor.hostPreferences.v1';
-
-interface HostPreference { favorite: boolean; note: string }
 type BrowserService = Pick<MonitorService, 'getRecords' | 'getIdleHistory' | 'onDidChange'>;
 
 export function hostFilterLabel(filter: HostFilter): string {
@@ -46,20 +45,7 @@ export interface NpuSummary {
 
 export function summarizeNpu(record: HostRecord, history: HostHistoryView, now = Date.now()): NpuSummary {
   const snapshot = record.snapshot;
-  const fresh = Boolean(snapshot && !record.stale && now >= snapshot.collectedAt &&
-    now - snapshot.collectedAt <= getSettings().pollIntervalSeconds * 2000);
-  const outdated = Boolean(snapshot && !fresh);
-  const cards = new Map(history.cards.map(card => [card.id, card]));
-  const usable = fresh && record.state !== 'missingConfig' && snapshot &&
-    !snapshot.partial && snapshot.devices.length > 0;
-  const currentCards = usable ? snapshot.devices.map(device => cards.get(device.id)) : [];
-  const idleCards = usable ? currentCards.flatMap(card => {
-    return card?.observedAt === snapshot.collectedAt && card.state === 'idle' &&
-      card.idleSince !== null && card.idleSince <= snapshot.collectedAt ? [card] : [];
-  }) : [];
-  const allKnown = usable && currentCards.every(card => card?.observedAt === snapshot.collectedAt && card.state !== 'unknown');
-  const idleCount = idleCards.length > 0 || allKnown ? idleCards.length : null;
-  const longestIdleMs = idleCards.length ? now - Math.min(...idleCards.map(card => card.idleSince!)) : null;
+  const { outdated, idleCount, longestIdleMs } = currentNpuState(record, history, getSettings(), now);
   const description: string[] = [];
   if (record.refreshing || outdated || (record.state !== 'idle' && record.state !== 'busy')) {
     description.push(hostStateText(record.refreshing ? 'refreshing' : record.state));
@@ -71,10 +57,6 @@ export function summarizeNpu(record: HostRecord, history: HostHistoryView, now =
     description.push(new Date(snapshot.collectedAt).toLocaleTimeString());
   }
   return { outdated, idleCount, longestIdleMs, description };
-}
-
-function preferenceKey(record: HostRecord): string {
-  return JSON.stringify([record.host.configPath, record.host.alias]);
 }
 
 export class HostBrowser implements vscode.Disposable {
@@ -99,8 +81,7 @@ export class HostBrowser implements vscode.Disposable {
   }
 
   public preference(record: HostRecord): HostPreference {
-    const value = this.state.get<Record<string, HostPreference>>(PREFERENCES_KEY)?.[preferenceKey(record)];
-    return { favorite: value?.favorite === true, note: typeof value?.note === 'string' ? value.note : '' };
+    return readHostPreference(this.state, record);
   }
 
   public setFavorite(records: readonly HostRecord[], favorite: boolean): Promise<void> {
@@ -113,14 +94,14 @@ export class HostBrowser implements vscode.Disposable {
 
   private save(records: readonly HostRecord[], patch: Partial<HostPreference>): Promise<void> {
     this.pending = this.pending.catch(() => {}).then(async () => {
-      const saved = { ...this.state.get<Record<string, HostPreference>>(PREFERENCES_KEY) };
+      const saved = { ...this.state.get<Record<string, HostPreference>>(HOST_PREFERENCES_KEY) };
       for (const record of records) {
-        const key = preferenceKey(record);
+        const key = hostPreferenceKey(record);
         const next = { ...this.preference(record), ...patch };
         if (!next.favorite && !next.note) delete saved[key];
         else saved[key] = next;
       }
-      await this.state.update(PREFERENCES_KEY, saved);
+      await this.state.update(HOST_PREFERENCES_KEY, saved);
       if (!this.disposed) this.refresh();
     });
     return this.pending;

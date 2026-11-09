@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { readHostPreference, type HostPreference } from './hostPreferences.js';
 import { DevContainerCollector } from './containers/collector.js';
 import { ImageCollector } from './containers/images.js';
 import { NpuCollector } from './npu/collector.js';
@@ -51,6 +52,21 @@ export class MonitorService implements vscode.Disposable {
 
   public getRecord(alias: string): HostRecord | undefined {
     return this.records.get(alias);
+  }
+
+  public getHostPreference(alias: string): HostPreference {
+    const record = this.records.get(alias);
+    return record ? readHostPreference(this.context.globalState, record) : { favorite: false, note: '' };
+  }
+
+  public async refreshAliases(aliases: string[], scope: 'npu' | 'containers' | 'both'): Promise<void> {
+    if (scope === 'containers') return this.scanContainerAliases(aliases);
+    await this.reloadConfig();
+    const records = [...new Set(aliases)].map(alias => this.records.get(alias));
+    if (records.some(record => !record || record.state === 'missingConfig')) {
+      throw new Error('Unknown or unavailable SSH host');
+    }
+    await this.scanRecords(records as HostRecord[], undefined, undefined, scope === 'both');
   }
 
   public getIdleHistory(alias: string, now = Date.now(), includeBins = true): HostHistoryView {

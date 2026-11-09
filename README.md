@@ -150,7 +150,7 @@ when opening a container.
 
 ### MCP access
 
-Enable MCP from the status row at the top of NPU Monitor. Codex and Claude Code can
+Enable MCP from the status row at the top of NPU Monitor. MCP clients can
 read cached hosts and containers, or explicitly refresh selected hosts. The service
 uses an authenticated loopback endpoint (default port `49160`) and stops with the window.
 Only one window can listen on a given port; clients should run in the same environment.
@@ -158,17 +158,37 @@ Only one window can listen on a given port; clients should run in the same envir
 Choose **Copy MCP environment variables** to obtain the endpoint and token. Configure
 your client to use Streamable HTTP with the URL from `NPU_MONITOR_MCP_URL` and an
 `Authorization: Bearer <token>` header using `NPU_MONITOR_MCP_TOKEN`. The copied values
-contain credentials. Cached idle status is not a resource reservation. `rank_idle_hosts` and
-`get_idle_history` read locally stored observations without SSH queries. MCP reports
-NPU `collectedAt`, `ageSeconds`, `maxAgeSeconds`, `validUntil` and `outdated`
-for twice the polling interval (360 seconds by default), including in ranked candidates.
-Container `collectedAt` and `ageSeconds` are independent; `maxAgeSeconds`, `validUntil`
-and `outdated` are `null` because containers have no fixed expiry. Check `stale` after failures.
-`refresh_containers` updates only container metadata without an NPU scan. `list_host_images` runs read-only Docker
-queries for at most 20 vLLM-Ascend candidates and returns tags, image ID, creation time,
-architecture and OS. Container details include the actual image ID. Select an image before
-creating a container; a running container reports its current image. Discovery does not
-reserve the host or install software. Recheck host occupancy before execution.
+contain credentials.
+
+| Tool | Data |
+| --- | --- |
+| `get_overview` | Resource totals, model distribution and observation coverage |
+| `query_hosts` | Filtered host summaries; searches aliases, addresses, notes and visible container metadata |
+| `inspect_host` | One host section: `summary`, `devices`, `processes`, `containers`, `container` or `connection` |
+| `get_history` | Per-device statistics for the last 24 hours by default; `mode: "buckets"` returns time buckets |
+| `refresh_hosts` | Explicit refresh of up to 20 hosts; `scope` is `npu` (default), `containers` or `both` |
+
+Example `query_hosts` arguments:
+
+```json
+{"query": "A3", "minIdleCards": 8, "sort": "idleDuration", "limit": 3}
+```
+
+Parameters, defaults and section-specific options are described in each tool's schema.
+Queries read caches and preserve the configured container viewing scope. Idle criteria
+use confirmed per-device observations, independently of notification `idleScope`.
+Unknown idle quantities and missing model names are `null`.
+
+Results contain `asOf`, `data` and, for lists, `page` with `total`, `returned` and
+`nextCursor`. Lists default to 10 entries, allow up to 50, and fit a 16 KiB JSON budget.
+Pass `nextCursor` as `cursor` with the same conditions to continue; the page size may
+change. Cursors retain a fixed snapshot for up to two minutes. Refresh continuation
+pages do not repeat collection. Reconnect clients after updating the extension.
+
+NPU observations expire after twice the polling interval (360 seconds by default).
+Containers have independent collection times and stale flags, with no fixed expiry.
+Historical coverage describes observations; mixed or missing buckets are not confirmed
+idle time. Cached idle status is not a resource reservation.
 
 ## Configuration
 
