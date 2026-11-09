@@ -331,7 +331,7 @@
           "default": 8,
           "minimum": 1,
           "maximum": 60,
-          "scope": "machine",
+          "scope": "window",
           "description": "%configuration.connectTimeoutSeconds%"
         },
         "npuMonitor.exporterProbeTimeoutSeconds": {
@@ -339,7 +339,7 @@
           "default": 2,
           "minimum": 1,
           "maximum": 10,
-          "scope": "machine",
+          "scope": "window",
           "description": "%configuration.exporterProbeTimeoutSeconds%"
         },
         "npuMonitor.npuSmiTimeoutSeconds": {
@@ -347,7 +347,7 @@
           "default": 10,
           "minimum": 1,
           "maximum": 60,
-          "scope": "machine",
+          "scope": "window",
           "description": "%configuration.npuSmiTimeoutSeconds%"
         },
         "npuMonitor.maxConcurrentHosts": {
@@ -355,7 +355,7 @@
           "default": 8,
           "minimum": 1,
           "maximum": 32,
-          "scope": "machine",
+          "scope": "window",
           "description": "%configuration.maxConcurrentHosts%"
         },
         "npuMonitor.excludedHosts": {
@@ -364,7 +364,7 @@
             "type": "string"
           },
           "default": [],
-          "scope": "machine",
+          "scope": "window",
           "description": "%configuration.excludedHosts%"
         },
         "npuMonitor.pollIntervalSeconds": {
@@ -422,7 +422,7 @@
           "default": 5,
           "minimum": 1,
           "maximum": 60,
-          "scope": "machine",
+          "scope": "window",
           "description": "%configuration.devContainers.timeoutSeconds%"
         },
         "npuMonitor.containers.filterMode": {
