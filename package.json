@@ -500,7 +500,8 @@
     "check": "npm run check-types && npm run lint && npm test",
     "package": "npm run check && node esbuild.mjs --production",
     "vscode:prepublish": "npm run package",
-    "vsix": "node scripts/package-vsix.mjs"
+    "vsix": "node scripts/package-vsix.mjs",
+    "docs:capture": "node scripts/capture-readme.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.0",
@@ -511,9 +512,12 @@
     "@eslint/js": "^10.0.1",
     "@types/node": "^20.19.43",
     "@types/vscode": "1.100.0",
+    "@vscode/test-electron": "2.5.2",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.2",
     "eslint": "^10.11.0",
+    "playwright": "1.65.0",
+    "sharp": "0.35.5",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.70.1",
     "vitest": "^4.1.12"

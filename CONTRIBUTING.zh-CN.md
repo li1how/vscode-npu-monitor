@@ -26,6 +26,7 @@ code .
 | `npm run watch` | 修改时自动重新构建开发版本 |
 | `npm run check` | 运行类型检查、lint 和测试 |
 | `npm run vsix` | 运行全部检查、构建生产版本并打包 VSIX |
+| `npm run docs:capture` | 刷新 `media/` 中的 README 动图和截图 |
 
 `npm run vsix` 根据 `package.json` 版本生成
 `release/vscode-npu-monitor-<version>.vsix`。CI 在 Linux 和 Windows 上执行此命令，
@@ -53,7 +54,8 @@ test/
   helpers/           # 共享测试数据和内存存储
   fixtures/          # 采集输出样本
   mocks/             # VS Code API 模拟对象
-scripts/             # 打包脚本
+scripts/             # 打包与 README 截图脚本
+  readme/            # 隔离的演示数据与截图场景
 l10n/                # 运行时翻译
 media/               # 图标和演示资源
 ```
@@ -78,6 +80,37 @@ media/               # 图标和演示资源
 不为测试安装软件、管理服务或创建、启停、删除容器。所有采集路径遵循
 [安全行为](README.zh-CN.md#安全行为)。MCP 凭据仅存 SecretStorage，
 通过用户主动复制交付，不记录到日志；验证不修改真实 MCP 客户端设置。
+
+## 刷新 README 图片
+
+界面更新后，重新生成中英文 README 共用的三份图片：
+
+```bash
+npm ci
+npm run docs:capture
+```
+
+命令从当前源码构建扩展，启动隔离的 VS Code 窗口，更新
+`media/host-search-and-filter.gif`、`media/monitoring.png` 和
+`media/idle-history.png`。展示内容包括展开节点、筛选空闲卡、查找并定位节点、
+容器操作入口和逐卡历史。提交前检查图片效果；只有全部场景成功后才覆盖现有图片。
+
+首次运行会下载 VS Code 1.100.3 到 Git 忽略的 `release/readme-capture/`，之后复用缓存。
+每次使用新的配置、工作区和扩展目录，固定英文界面、主题、布局及模拟数据的时间。
+不会读取 SSH 配置、采集远端数据、修改已有订阅或启用 MCP。演示代码仅参与截图构建，
+不进入生产构建或 VSIX。
+
+运行需要图形桌面，WSLg 可直接执行；无桌面的 Linux 主机安装 Xvfb 后，使用
+`xvfb-run -a npm run docs:capture`。精简 Debian/Ubuntu 环境缺少 `libasound` 或
+`libxkbfile` 时，脚本会下载并解压到自身缓存，不安装系统软件包。
+其他缺失的 VS Code 运行依赖需另行安装。本流程已在 Linux/WSLg 验证，
+尚未验证 Windows 原生和 macOS 截图。
+
+执行 `npm run docs:capture -- --help` 查看已有原生 VS Code 可执行文件参数
+`--vscode-path` 和其他输出目录参数 `--output-dir`。
+修改示例数据时编辑 `scripts/readme/fixtures.ts`，修改演示流程时编辑
+`scripts/readme/scenes.mjs`；演示采集服务的公开接口会与生产服务一起进行类型检查。
+失败时保留日志及可用的失败截图，目录由命令输出；成功时清理临时配置。
 
 ## 发布
 

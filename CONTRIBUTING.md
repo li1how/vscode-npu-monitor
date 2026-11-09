@@ -26,6 +26,7 @@ changes, or use `npm run watch` while developing.
 | `npm run watch` | Rebuild the development bundle on changes |
 | `npm run check` | Run type checks, lint and tests |
 | `npm run vsix` | Run all checks, build production code and package the VSIX |
+| `npm run docs:capture` | Refresh the README animation and screenshots in `media/` |
 
 `npm run vsix` writes `release/vscode-npu-monitor-<version>.vsix` using the version
 in `package.json`. CI runs this command on Linux and Windows, so it also checks
@@ -53,7 +54,8 @@ test/
   helpers/           # Shared test data and in-memory storage
   fixtures/          # Collector output samples
   mocks/             # VS Code API test double
-scripts/             # Packaging scripts
+scripts/             # Packaging and README capture scripts
+  readme/            # Isolated demonstration data and screenshot scenes
 l10n/                # Runtime translations
 media/               # Icons and demo assets
 ```
@@ -84,6 +86,43 @@ services or create, start, stop or delete containers for testing. Follow the
 [security behavior](https://github.com/li1how/vscode-npu-monitor/blob/main/README.md#security) for all collection paths. MCP credentials
 stay in SecretStorage and are only delivered through user-initiated copying;
 never log them or modify real MCP client settings during validation.
+
+## Refresh README images
+
+After changing the UI, regenerate the three assets used by both READMEs:
+
+```bash
+npm ci
+npm run docs:capture
+```
+
+The command builds the current extension source, opens an isolated VS Code window,
+and updates `media/host-search-and-filter.gif`, `media/monitoring.png` and
+`media/idle-history.png`. It captures host expansion, idle filtering, search and
+reveal, container actions, and the per-card history view. Review the images before
+committing them. Only a complete, successful capture replaces the existing assets.
+
+The first run downloads VS Code 1.100.3 into the ignored `release/readme-capture/`
+cache; subsequent runs reuse it. Each run uses a fresh profile, workspace and
+extension directory, a fixed English theme/layout, and synthetic data with a fixed
+clock. It does not read SSH configuration, collect remote data, change existing
+subscriptions or enable MCP. Demonstration code is used only by the capture build
+and is excluded from the production bundle and VSIX.
+
+A graphical desktop is required. WSLg works directly; on a headless Linux host use
+`xvfb-run -a npm run docs:capture` after installing Xvfb. Minimal Debian/Ubuntu
+systems may need `libasound` or `libxkbfile`; the script downloads and extracts those
+libraries into its cache without installing system packages. Other missing VS Code
+runtime dependencies must be installed separately. The workflow has been verified
+on Linux/WSLg; native Windows and macOS capture have not been verified.
+
+Run `npm run docs:capture -- --help` for an existing native VS Code executable
+override (`--vscode-path`) or an alternate output directory (`--output-dir`).
+Update `scripts/readme/fixtures.ts` when changing sample data and
+`scripts/readme/scenes.mjs` when changing the demonstrated flow. The service's
+public interface is type-checked against production. Failed runs retain logs and a
+failure screenshot, when available, under the cache path printed by the command;
+successful runs remove their temporary profile.
 
 ## Release
 
