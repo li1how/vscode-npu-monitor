@@ -4,6 +4,7 @@ import { filterContainers, invalidWorkspacePathCount } from '../containers/filte
 import { devContainerDisplayName } from '../containers/metadata.js';
 import type { McpController } from '../mcp/controller.js';
 import { isDeviceIdle } from '../npu/idle.js';
+import { normalizeNpuModel } from '../npu/model.js';
 import type { MonitorService } from '../monitorService.js';
 import { getSettings } from '../settings.js';
 import type { DevContainer, DevContainerState, HostRecord, NpuDevice } from '../types.js';
@@ -309,7 +310,7 @@ export class NpuTreeProvider implements vscode.TreeDataProvider<MonitorNode>, vs
         : new vscode.ThemeIcon('pulse', new vscode.ThemeColor('charts.yellow'));
     const tooltip = new vscode.MarkdownString();
     tooltip.appendMarkdown('**NPU ' + device.id + '**  \n');
-    tooltip.appendMarkdown(vscode.l10n.t('Model: {0}', device.model ?? '-') + '  \n');
+    tooltip.appendMarkdown(vscode.l10n.t('Model: {0}', normalizeNpuModel(device.model) ?? vscode.l10n.t('Unknown')) + '  \n');
     tooltip.appendMarkdown(vscode.l10n.t('Health: {0}', device.health) + '  \n');
     tooltip.appendMarkdown(vscode.l10n.t(
       'Utilization: {0}',

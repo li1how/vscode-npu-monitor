@@ -200,6 +200,7 @@ describe('monitor scan orchestration', () => {
     try {
       await browser.setFavorite([service.getRecord('beta')!], true);
       await browser.setNote(service.getRecord('beta')!, 'Favorite benchmark host');
+      expect(service.getHostPreference('beta')).toEqual({ favorite: true, note: 'Favorite benchmark host' });
       browser.setFilter('favorites');
       expect(browser.records().map(record => record.host.alias)).toEqual(['beta']);
       expect(collectorState.aliases).toEqual([]);
@@ -212,6 +213,37 @@ describe('monitor scan orchestration', () => {
       browser.dispose();
       service.dispose();
     }
+  });
+
+  it.each(['npu', 'containers', 'both'] as const)('refreshes only the requested %s sources without changing subscriptions', async scope => {
+    settingsState.value!.devContainersEnabled = true;
+    const service = createService(['alpha']);
+    try {
+      await service.scanAliases(['alpha']);
+      const npu = service.getRecord('alpha')!.snapshot;
+      const containers = service.getRecord('alpha')!.devContainers!.snapshot;
+      collectorState.aliases.length = 0;
+      containersState.aliases.length = 0;
+      await service.refreshAliases(['alpha', 'alpha'], scope);
+      expect(collectorState.aliases).toEqual(scope === 'containers' ? [] : ['alpha']);
+      expect(containersState.aliases).toEqual(scope === 'npu' ? [] : ['alpha']);
+      if (scope === 'containers') expect(service.getRecord('alpha')!.snapshot).toBe(npu);
+      if (scope === 'npu') expect(service.getRecord('alpha')!.devContainers!.snapshot).toBe(containers);
+      expect(service.getRecord('alpha')!.subscribed).toBe(true);
+    } finally { service.dispose(); }
+  });
+
+  it('keeps successful refresh targets available when another target fails', async () => {
+    const service = createService();
+    collectorState.handler = async host => host.alias === 'beta'
+      ? { state: 'timeout', error: 'Timed out' } : snapshot(0, 0);
+    try {
+      await service.refreshAliases(['alpha', 'beta'], 'npu');
+      expect(service.getRecord('alpha')!.state).toBe('idle');
+      expect(service.getRecord('beta')!.state).toBe('timeout');
+      expect(containersState.aliases).toEqual([]);
+      await expect(service.refreshAliases(['missing'], 'npu')).rejects.toThrow('Unknown');
+    } finally { service.dispose(); }
   });
 
   it('stops taking queued hosts after cancellation', async () => {

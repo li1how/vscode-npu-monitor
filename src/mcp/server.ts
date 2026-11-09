@@ -5,15 +5,18 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 
 import type { MonitorSettings } from '../types.js';
 import { createMonitorMcp, type MonitorReader } from './tools.js';
+import { SnapshotPages } from './results.js';
 
 export class MonitorHttpServer {
   private server?: Server;
   private readonly connections = new Set<() => Promise<void>>();
+  private pages = new SnapshotPages();
 
   public constructor(private readonly service: MonitorReader, private readonly settings: () => MonitorSettings) {}
 
   public async start(port: number, token: string): Promise<void> {
     if (!token) throw new Error('Missing MCP token');
+    const pages = this.pages;
     const server = createServer((req, res) => {
       const reject = (status: number): void => { res.writeHead(status); res.end(); };
       const host = req.headers.host;
@@ -26,7 +29,7 @@ export class MonitorHttpServer {
       if (req.url !== '/mcp') return reject(404);
       if (req.method !== 'POST') return reject(405);
       const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
-      const mcp = createMonitorMcp(this.service, this.settings);
+      const mcp = createMonitorMcp(this.service, this.settings, pages);
       const close = async (): Promise<void> => { this.connections.delete(close); await mcp.close(); };
       this.connections.add(close);
       res.on('close', () => { void close(); });
@@ -48,6 +51,8 @@ export class MonitorHttpServer {
   public async stop(): Promise<void> {
     const server = this.server;
     this.server = undefined;
+    this.pages.clear();
+    this.pages = new SnapshotPages();
     await Promise.allSettled([...this.connections].map(close => close()));
     if (server) await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); });
   }

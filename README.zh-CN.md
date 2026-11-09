@@ -120,20 +120,38 @@ git push origin v0.2.5
 
 ### MCP 接入
 
-点击面板顶部的 MCP 状态行启用服务。Codex、Claude Code 可读取缓存的主机和容器信息，
+点击面板顶部的 MCP 状态行启用服务。MCP 客户端可读取缓存的主机和容器信息，
 或显式刷新指定节点。服务使用带鉴权的回环地址（默认端口 `49160`），随窗口关闭而停止；
 同一端口只允许一个窗口监听，客户端应运行在相同环境中。
 
 选择“复制 MCP 环境变量”获取地址和 token。在客户端中选择 Streamable HTTP，
 使用 `NPU_MONITOR_MCP_URL` 作为地址，将 `NPU_MONITOR_MCP_TOKEN` 配置为
-`Authorization: Bearer <token>` 请求头。复制内容含凭据；缓存中的空闲状态不代表设备已被预约。`rank_idle_hosts` 和 `get_idle_history`
-只读取本地观测历史，不发起 SSH 查询。MCP 的 NPU 数据及候选结果包含 `collectedAt`、
-`ageSeconds`、`maxAgeSeconds`、`validUntil`、`outdated`；有效期为轮询周期的两倍
-（默认 360 秒）。容器单独返回 `collectedAt` 和 `ageSeconds`，其 `maxAgeSeconds`、
-`validUntil`、`outdated` 均为 `null`，采集失败时查看 `stale`。`refresh_containers` 仅更新容器信息，不重扫 NPU。
-`list_host_images` 只读查询最多 20 个 vLLM-Ascend 镜像候选，返回标签、镜像 ID、
-创建时间、架构和系统；容器详情也返回实际镜像 ID。新建容器前先展示候选并选择，
-复用时核对现用镜像。发现结果不预留资源，执行前仍需复核节点占用。
+`Authorization: Bearer <token>` 请求头。复制内容含凭据。
+
+| 工具 | 数据 |
+| --- | --- |
+| `get_overview` | 资源总数、型号分布和观测覆盖情况 |
+| `query_hosts` | 筛选后的节点摘要；搜索别名、地址、备注和可见容器元数据 |
+| `inspect_host` | 单节点分区：`summary`、`devices`、`processes`、`containers`、`container` 或 `connection` |
+| `get_history` | 默认最近 24 小时的逐卡统计；`mode: "buckets"` 返回时间桶 |
+| `refresh_hosts` | 显式刷新最多 20 个节点；`scope` 为 `npu`（默认）、`containers` 或 `both` |
+
+`query_hosts` 参数示例：
+
+```json
+{"query": "A3", "minIdleCards": 8, "sort": "idleDuration", "limit": 3}
+```
+
+参数、默认值及分区限制见各工具的 schema。查询只读缓存，容器范围沿用配置的查看模式。
+空闲条件使用已确认的逐卡观测，不受提醒设置 `idleScope` 影响；未知空闲数量和缺失型号返回 `null`。
+
+结果包含 `asOf`、`data`；列表另有 `page`，提供 `total`、`returned`、`nextCursor`。
+列表默认 10 条、最多 50 条，每份 JSON 不超过 16 KiB。保持查询条件不变，将 `nextCursor`
+作为 `cursor` 继续读取，可调整页大小。游标保留固定快照，有效期最多两分钟。
+刷新结果的续页不会重复采集；扩展更新后重新连接客户端。
+
+NPU 数据有效期为两倍轮询周期，默认 360 秒。容器独立提供采集时间和失效标记，不设固定有效期。
+历史覆盖率表示观测情况，混合或缺失的时间桶不算已确认空闲时间；缓存空闲状态不代表资源已被预约。
 
 ## 配置
 

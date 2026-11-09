@@ -126,6 +126,25 @@ describe('NPU status parsers', () => {
     );
   });
 
+  it.each([undefined, '', '   '])('reads model metadata across exporter samples with initial value %j', initial => {
+    const label = initial === undefined ? '' : ',model_name="' + initial + '"';
+    const result = parsePrometheusMetrics([
+      'npu_chip_info_health_status{id="0"' + label + '} 1',
+      'npu_chip_info_overall_utilization{id="0",model_name=" Ascend910 "} 0',
+      'npu_chip_info_process_info_num{id="0",model_name=""} 0',
+      'npu_chip_info_temperature{id="0",model_name="different-model"} 30',
+    ].join('\n'));
+    expect(result.partial).toBe(false);
+    expect(result.devices[0]).toMatchObject({ model: 'Ascend910', utilizationPercent: 0, processCount: 0 });
+    const missing = parsePrometheusMetrics([
+      'npu_chip_info_health_status{id="0"' + label + '} 1',
+      'npu_chip_info_overall_utilization{id="0"' + label + '} 0',
+      'npu_chip_info_process_info_num{id="0"' + label + '} 0',
+    ].join('\n'));
+    expect(missing.devices[0]?.model).toBeUndefined();
+    expect(missing.partial).toBe(false);
+  });
+
   it('uses npu_chip_info_utilization as a fallback when overall_utilization is absent', () => {
     const text = [
       'npu_chip_info_health_status{id="0"} 1',
