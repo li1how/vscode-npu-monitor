@@ -2,12 +2,16 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - Add `npm run docs:capture` to regenerate bilingual README screenshots and animation from the current UI with isolated synthetic data.
 - Simplify internal commands, selection, freshness and MCP types; remove unused collectors, expand execution and activation tests, and move development and release instructions into bilingual contributing guides.
-- Update development minimatch to 11.0.5 and glob to 14.0.4 to fix the globparts amplification advisory (GHSA-g3hv-75wg-m249).
 - Organize MCP tools around resource overview, filtered host discovery, section-specific details, historical evidence and explicit scoped refresh. Replace previous tools with bounded, paginated results and shared read-only resource state.
 - Add host search by alias, address and local note, persistent favorites, and cached host filters with visible/total counts. Replace the idle-host picker with the idle filter while retaining duration ranking.
 - Share fresh NPU summaries between search and the host tree, show unknown idle counts explicitly, and update filters when cached NPU data expires without additional SSH queries.
+- Store connection timeout, exporter probe timeout, `npu-smi` timeout, scan concurrency, excluded hosts and the polling interval as window settings. SSH configuration, known hosts and the SSH executable path remain machine settings.
+- Generate GitHub Release notes in Actions and stop publication when note generation fails.
+- Update @modelcontextprotocol/sdk to 1.32.2, ESLint to 10.14.0 and typescript-eslint to 8.72.1. Keep development minimatch at 11.0.5 and glob at 14.0.4 for GHSA-g3hv-75wg-m249.
 
 ## 0.2.5
 

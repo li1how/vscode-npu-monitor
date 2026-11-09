@@ -44,7 +44,7 @@
 ```bash
 npm ci
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.2.5.vsix
+code --install-extension release/vscode-npu-monitor-0.3.0.vsix
 ```
 
 同一个 VSIX 可以安装到 Windows 本地 Extension Host 或 WSL Extension Host。
