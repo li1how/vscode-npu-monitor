@@ -49,7 +49,7 @@ Build from source with Node.js 24 LTS (`npm run vsix` includes all checks):
 ```bash
 npm ci
 npm run vsix
-code --install-extension release/vscode-npu-monitor-0.2.5.vsix
+code --install-extension release/vscode-npu-monitor-0.3.0.vsix
 ```
 
 The same VSIX can be installed in either a local Windows Extension Host or a
